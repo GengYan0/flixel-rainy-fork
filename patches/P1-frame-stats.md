@@ -1,5 +1,14 @@
 # P1 — FlxFrameStats 帧时间统计（基线 v6.2.0）
 
+## 基座来源（重要）
+
+本 fork 的源码基座取自**本机 haxelib 权威安装** `C:\HaxeToolkit\haxe\lib\flixel\6,2,0`。
+
+第一次尝试用 jsdelivr CDN 按 `gh/HaxeFlixel/flixel@6.2.0` 下载，**取到的是 6.1.2 时代的内容**（同一文件比对：
+基线 `SoundFrontEnd.hx` 13427 字节、只有 `recycle()`；真 6.2.0 是 19232 字节、含 `create()/createStreamed()/createFromURL()`）。
+用它做的所有"源码核对"都是无效验证：编译期报 `flixel.system.frontEnds.SoundFrontEnd has no field create`（flixel-addons 4.0.2 用到）。
+教训：**fork 基座必须取本机已装、且已知能编译通过的那份**，不要信 CDN 的 tag 解析。
+
 ## 动机
 
 性能优化的第一纪律：先测量，后动刀。没有帧时间分解，所有"优化"都是盲调。
@@ -76,5 +85,15 @@ F3 覆盖层（250ms 节流刷新，避免每次排序）：
 
 ## 验证状态
 
-- 已完成：10 个插入点与 6.2.0 源码逐行核对；符号引用核对通过
-- 未完成：接入引擎后的编译与实机采样（需 `haxelib dev rainy-flixel` 后重建）
+| 项 | 状态 | 证据 |
+|---|---|---|
+| 10 个插入点与**权威** 6.2.0 逐行核对 | 完成 | `git apply` 报 `Applied patch flixel/FlxGame.hx cleanly` |
+| 符号引用核对 | 完成 | `FlxGame.hx` 内 `FlxFrameStats` 出现 9 次（1 import + 8 调用） |
+| 已知编译错误修复 | 完成 | `_scratch.length = 0` → `_scratch.resize(0)`（Haxe 4.3 中 `Array.length` 只读，写它报 `This expression cannot be accessed for writing`） |
+| 接入引擎后的编译 | 待本轮结果 | 见 `source-restructure-plan.md` 验证记录 |
+| 实机采样（p50/p99 出数） | 未做 | 需启动 exe 观察 F3 覆盖层 |
+
+## 接入硬约束
+
+接入时有三条实测得出的硬约束（haxelib 名必须是 `flixel`、version 必须是纯 semver、引擎不能钉 flixel 版本），
+详见 `../README.md` 的「接入（三条硬约束，实测得出）」。
