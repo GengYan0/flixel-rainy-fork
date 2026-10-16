@@ -1,0 +1,1 @@
+{"repo": "https://github.com/HaxeFlixel/flixel", "tag": "6.2.0", "imported": "2026-10-17", "fork_version": "6.2.0-rainy.1", "sync": "git fetch upstream --tags && git checkout upstream/<version> -- flixel/"}
