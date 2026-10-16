@@ -1,6 +1,7 @@
 package flixel;
 
 import flixel.graphics.tile.FlxDrawBaseItem;
+import flixel.system.FlxFrameStats;
 import flixel.system.FlxSplash;
 import flixel.util.FlxArrayUtil;
 import flixel.util.FlxDestroyUtil;
@@ -462,6 +463,8 @@ class FlxGame extends Sprite
 		_elapsedMS = ticks - _total;
 		_total = ticks;
 
+		FlxFrameStats.beginFrame();
+
 		#if FLX_SOUND_TRAY
 		if (soundTray != null && soundTray.active)
 			soundTray.update(_elapsedMS);
@@ -674,6 +677,8 @@ class FlxGame extends Sprite
 		if (_nextState != null)
 			switchState();
 
+		FlxFrameStats.beginUpdate();
+
 		#if FLX_DEBUG
 		if (FlxG.debugger.visible)
 			ticks = getTicks();
@@ -710,6 +715,8 @@ class FlxGame extends Sprite
 		#end
 
 		filters = filtersEnabled ? _filters : null;
+
+		FlxFrameStats.endUpdate();
 	}
 
 	function updateElapsed():Void
@@ -808,6 +815,8 @@ class FlxGame extends Sprite
 
 		FlxG.cameras.lock();
 
+		FlxFrameStats.beginDraw();
+
 		if (FlxG.plugins.drawOnTop)
 		{
 			_state.draw();
@@ -819,9 +828,13 @@ class FlxGame extends Sprite
 			_state.draw();
 		}
 
+		FlxFrameStats.endDraw();
+
 		if (FlxG.renderTile)
 		{
+			FlxFrameStats.beginRender();
 			FlxG.cameras.render();
+			FlxFrameStats.endRender();
 
 			#if FLX_DEBUG
 			debugger.stats.drawCalls(FlxDrawBaseItem.drawCalls);
@@ -831,6 +844,8 @@ class FlxGame extends Sprite
 		FlxG.cameras.unlock();
 
 		FlxG.signals.postDraw.dispatch();
+
+		FlxFrameStats.endFrame(FlxDrawBaseItem.drawCalls);
 
 		#if FLX_DEBUG
 		debugger.stats.flixelDraw(getTicks() - ticks);
