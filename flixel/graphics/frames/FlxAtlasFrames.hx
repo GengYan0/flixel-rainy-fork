@@ -11,14 +11,46 @@ import flixel.system.FlxAssets;
 import haxe.xml.Access;
 import openfl.geom.Rectangle;
 
-/**
- * Atlas frames collection. It makes possible to use texture atlases in Flixel.
- * Plus it contains few packer parser methods for most commonly used atlas formats.
- */
+typedef AtlasFormatParser = FlxGraphicAsset->Dynamic->FlxAtlasFrames;
+
 class FlxAtlasFrames extends FlxFramesCollection
 {
 	var usedGraphics:Array<FlxGraphic> = [];
-	
+
+	static var formatRegistry:Map<String, AtlasFormatParser> = new Map();
+
+	public static function registerFormat(name:String, parser:AtlasFormatParser):Void
+	{
+		if (name == null || name.length < 1 || parser == null)
+			return;
+		formatRegistry.set(name, parser);
+	}
+
+	public static function hasFormat(name:String):Bool
+	{
+		return name != null && formatRegistry.exists(name);
+	}
+
+	public static function formatNames():Array<String>
+	{
+		var out:Array<String> = [];
+		for (key in formatRegistry.keys()) out.push(key);
+		return out;
+	}
+
+	public static function fromFormat(name:String, source:FlxGraphicAsset, description:Dynamic):FlxAtlasFrames
+	{
+		var parser:AtlasFormatParser = name == null ? null : formatRegistry.get(name);
+		if (parser == null)
+			return null;
+		return parser(source, description);
+	}
+
+	public static function clearFormats():Void
+	{
+		formatRegistry = new Map();
+	}
+
 	public function new(parent:FlxGraphic, ?border:FlxPoint)
 	{
 		super(parent, FlxFrameCollectionType.ATLAS, border);
@@ -276,7 +308,6 @@ class FlxAtlasFrames extends FlxFramesCollection
 				size.set(0, 0, rect.width, rect.height);
 			}
 			
-
 			var angle = rotated ? FlxFrameAngle.ANGLE_NEG_90 : FlxFrameAngle.ANGLE_0;
 
 			var offset = FlxPoint.get(-size.x, -size.y);
