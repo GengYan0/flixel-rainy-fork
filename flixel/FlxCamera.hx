@@ -727,17 +727,70 @@ class FlxCamera extends FlxBasic
 		_headTriangles = null;
 	}
 
+	public static var sortDrawItems:Bool = false;
+
 	@:allow(flixel.system.frontEnds.CameraFrontEnd)
 	function render():Void
 	{
 		flashSprite.filters = filtersEnabled ? filters : null;
-		
+
+		if (sortDrawItems && _headOfDrawStack != null)
+			_headOfDrawStack = stableSortDrawStack(_headOfDrawStack);
+
 		var currItem:FlxDrawBaseItem<Dynamic> = _headOfDrawStack;
 		while (currItem != null)
 		{
 			currItem.render(this);
 			currItem = currItem.next;
 		}
+	}
+
+	static inline var SORT_LOOKBACK:Int = 8;
+
+	function stableSortDrawStack(head:FlxDrawBaseItem<Dynamic>):FlxDrawBaseItem<Dynamic>
+	{
+		var sorted:Array<FlxDrawBaseItem<Dynamic>> = [];
+		var curr:FlxDrawBaseItem<Dynamic> = head;
+		while (curr != null)
+		{
+			var nxt:FlxDrawBaseItem<Dynamic> = curr.next;
+			if (curr.type == flixel.graphics.tile.FlxDrawBaseItem.FlxDrawItemType.TILES)
+			{
+				var i:Int = sorted.length - 1;
+				var walked:Int = 0;
+				while (i >= 0 && walked < SORT_LOOKBACK)
+				{
+					var other:FlxDrawBaseItem<Dynamic> = sorted[i];
+					// TRIANGLE 是锚点：不越过锚点插入
+					if (other.type != flixel.graphics.tile.FlxDrawBaseItem.FlxDrawItemType.TILES) break;
+					if (other.graphics == curr.graphics) break;
+					i--;
+					walked++;
+				}
+				// 只有真的找到了同类（i 有效且是同类 TILES）才前插；否则保持原位
+				if (i >= 0 && sorted[i].type == flixel.graphics.tile.FlxDrawBaseItem.FlxDrawItemType.TILES
+					&& sorted[i].graphics == curr.graphics)
+					sorted.insert(i + 1, curr);
+				else
+					sorted.push(curr);
+			}
+			else
+			{
+				sorted.push(curr);
+			}
+			curr = nxt;
+		}
+
+		var newHead:FlxDrawBaseItem<Dynamic> = null;
+		var tail:FlxDrawBaseItem<Dynamic> = null;
+		for (item in sorted)
+		{
+			if (newHead == null) newHead = item;
+			else tail.next = item;
+			tail = item;
+			item.next = null;
+		}
+		return newHead;
 	}
 
 	public function drawPixels(?frame:FlxFrame, ?pixels:BitmapData, matrix:FlxMatrix, ?transform:ColorTransform, ?blend:BlendMode, ?smoothing:Bool = false,
