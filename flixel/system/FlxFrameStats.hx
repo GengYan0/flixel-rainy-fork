@@ -1,7 +1,8 @@
 package flixel.system;
 
-import openfl.Lib;
-
+#if cpp
+@:headerCode('#include <chrono>')
+#end
 class FlxFrameStats
 {
 	public static var enabled:Bool = true;
@@ -13,10 +14,30 @@ class FlxFrameStats
 	public static var drawCalls:Int = 0;
 	public static var frameCount:Int = 0;
 
-	static var _updateT0:Int = 0;
-	static var _drawT0:Int = 0;
-	static var _renderT0:Int = 0;
-	static var _frameT0:Int = 0;
+	// Float milliseconds with true sub-ms precision. Lib.getTimer() is whole ms, and on
+	// this toolchain haxe.Timer.stamp() also quantises to 1 ms — both make p50/p99 useless
+	// at high refresh. Use QueryPerformanceCounter on Windows, stamp() elsewhere.
+	// std::chrono::high_resolution_clock maps to QPC on MSVC, without dragging in
+	// <windows.h> (whose macros collide with OpenFL headers).
+	#if cpp
+	@:functionCode('
+		static const auto _rainy_t0 = std::chrono::high_resolution_clock::now();
+		auto _rainy_now = std::chrono::high_resolution_clock::now();
+		return std::chrono::duration<double, std::milli>(_rainy_now - _rainy_t0).count();
+	')
+	static function hrMS():Float return 0;
+
+	inline static function nowMS():Float
+		return hrMS();
+	#else
+	inline static function nowMS():Float
+		return haxe.Timer.stamp() * 1000.0;
+	#end
+
+	static var _updateT0:Float = 0;
+	static var _drawT0:Float = 0;
+	static var _renderT0:Float = 0;
+	static var _frameT0:Float = 0;
 	static var _updateAccum:Float = 0;
 	static var _drawAccum:Float = 0;
 	static var _renderAccum:Float = 0;
@@ -37,7 +58,7 @@ class FlxFrameStats
 	{
 		if (!enabled)
 			return;
-		_frameT0 = Lib.getTimer();
+		_frameT0 = nowMS();
 		_updateAccum = 0;
 		_drawAccum = 0;
 		_renderAccum = 0;
@@ -47,42 +68,42 @@ class FlxFrameStats
 	{
 		if (!enabled)
 			return;
-		_updateT0 = Lib.getTimer();
+		_updateT0 = nowMS();
 	}
 
 	public static function endUpdate():Void
 	{
 		if (!enabled)
 			return;
-		_updateAccum += Lib.getTimer() - _updateT0;
+		_updateAccum += nowMS() - _updateT0;
 	}
 
 	public static function beginDraw():Void
 	{
 		if (!enabled)
 			return;
-		_drawT0 = Lib.getTimer();
+		_drawT0 = nowMS();
 	}
 
 	public static function endDraw():Void
 	{
 		if (!enabled)
 			return;
-		_drawAccum += Lib.getTimer() - _drawT0;
+		_drawAccum += nowMS() - _drawT0;
 	}
 
 	public static function beginRender():Void
 	{
 		if (!enabled)
 			return;
-		_renderT0 = Lib.getTimer();
+		_renderT0 = nowMS();
 	}
 
 	public static function endRender():Void
 	{
 		if (!enabled)
 			return;
-		_renderAccum += Lib.getTimer() - _renderT0;
+		_renderAccum += nowMS() - _renderT0;
 	}
 
 	public static function endFrame(drawCalls:Int):Void
@@ -92,7 +113,7 @@ class FlxFrameStats
 		updateMS = _updateAccum;
 		drawMS = _drawAccum;
 		renderMS = _renderAccum;
-		totalMS = Lib.getTimer() - _frameT0;
+		totalMS = nowMS() - _frameT0;
 		FlxFrameStats.drawCalls = drawCalls;
 		frameCount++;
 
