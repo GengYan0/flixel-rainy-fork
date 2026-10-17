@@ -68,7 +68,10 @@ class CameraFrontEnd
 		
 		list.push(NewCamera);
 		if (DefaultDrawTarget)
+		{
 			defaults.push(NewCamera);
+			FlxCamera._defaultCameras = defaults; // keep static sync so null-camera objects render to the real default set
+		}
 		
 		NewCamera.ID = list.length - 1;
 		cameraAdded.dispatch(NewCamera);
@@ -102,7 +105,10 @@ class CameraFrontEnd
 		
 		list.insert(position, newCamera);
 		if (defaultDrawTarget)
+		{
 			defaults.push(newCamera);
+			FlxCamera._defaultCameras = defaults; // keep static sync
+		}
 		
 		for (i in position...list.length)
 			list[i].ID = i;
@@ -125,6 +131,7 @@ class CameraFrontEnd
 			FlxG.game.removeChild(Camera.flashSprite);
 			list.splice(index, 1);
 			defaults.remove(Camera);
+			FlxCamera._defaultCameras = defaults; // keep static sync
 		}
 		else
 		{
@@ -164,11 +171,12 @@ class CameraFrontEnd
 		}
 		
 		var index = defaults.indexOf(camera);
-		
+
 		if (value && index == -1)
 			defaults.push(camera);
 		else if (!value)
 			defaults.splice(index, 1);
+		FlxCamera._defaultCameras = defaults; // keep static sync so setDefaultDrawTarget actually takes effect
 	}
 
 	/**
