@@ -74,6 +74,15 @@ class FlxPointer
 		if (camera == null)
 			camera = FlxG.camera;
 		
+		if (camera == null)
+		{
+			// 相机全部缺失（编辑器关闭/状态切换的过渡帧还会跑鼠标更新）：
+			// 退回原始屏幕坐标，不要崩（真机 ESC 退出摄像机编辑器 NPE，2026-10-25）
+			if (result == null)
+				return FlxPoint.get(_rawX, _rawY);
+			return result.set(_rawX, _rawY);
+		}
+		
 		final p = getViewPosition(camera, FlxPoint.weak());
 		return camera.viewToWorldPosition(p, 1, 1, result);
 	}
@@ -109,6 +118,14 @@ class FlxPointer
 	{
 		if (camera == null)
 			camera = FlxG.camera;
+		
+		if (camera == null)
+		{
+			// 相机缺失（编辑器关闭/状态切换过渡帧）：退回游戏坐标，不要崩
+			if (result == null)
+				return FlxPoint.get(gameX, gameY);
+			return result.set(gameX, gameY);
+		}
 		
 		return camera.gameToViewPosition(gameX, gameY, result);
 	}
@@ -237,13 +254,18 @@ class FlxPointer
 		gameX = Std.int(_cachedPoint.x);
 		gameY = Std.int(_cachedPoint.y);
 		
-		getViewPosition(FlxG.camera, _cachedPoint);
-		viewX = Std.int(_cachedPoint.x);
-		viewY = Std.int(_cachedPoint.y);
-		
-		getWorldPosition(FlxG.camera, _cachedPoint);
-		x = Std.int(_cachedPoint.x);
-		y = Std.int(_cachedPoint.y);
+		// FlxG.camera 可能已被移除（编辑器关闭/状态切换过渡帧）：null 时跳过 view/world 更新、
+		// 保留上次值，避免 getWorldPosition→viewToWorldX 的 NPE（真机 ESC 退出摄像机编辑器崩溃）
+		if (FlxG.camera != null)
+		{
+			getViewPosition(FlxG.camera, _cachedPoint);
+			viewX = Std.int(_cachedPoint.x);
+			viewY = Std.int(_cachedPoint.y);
+			
+			getWorldPosition(FlxG.camera, _cachedPoint);
+			x = Std.int(_cachedPoint.x);
+			y = Std.int(_cachedPoint.y);
+		}
 	}
 	
 	public function toString():String

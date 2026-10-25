@@ -11,6 +11,8 @@ class FlxFrameStats
 	public static var drawMS:Float = 0;
 	public static var renderMS:Float = 0;
 	public static var totalMS:Float = 0;
+
+	public static var periodMS:Float = 0;
 	public static var drawCalls:Int = 0;
 	public static var frameCount:Int = 0;
 
@@ -38,6 +40,7 @@ class FlxFrameStats
 	static var _drawT0:Float = 0;
 	static var _renderT0:Float = 0;
 	static var _frameT0:Float = 0;
+	static var _prevFrameT0:Float = -1;
 	static var _updateAccum:Float = 0;
 	static var _drawAccum:Float = 0;
 	static var _renderAccum:Float = 0;
@@ -48,6 +51,7 @@ class FlxFrameStats
 	static var _drawSamples:Array<Float> = [];
 	static var _renderSamples:Array<Float> = [];
 	static var _totalSamples:Array<Float> = [];
+	static var _periodSamples:Array<Float> = [];
 	static var _drawCallSamples:Array<Int> = [];
 	static var _sampleIndex:Int = 0;
 	static var _sampleCount:Int = 0;
@@ -59,6 +63,8 @@ class FlxFrameStats
 		if (!enabled)
 			return;
 		_frameT0 = nowMS();
+		periodMS = (_prevFrameT0 < 0) ? 0 : (_frameT0 - _prevFrameT0);
+		_prevFrameT0 = _frameT0;
 		_updateAccum = 0;
 		_drawAccum = 0;
 		_renderAccum = 0;
@@ -121,6 +127,7 @@ class FlxFrameStats
 		_drawSamples[_sampleIndex] = drawMS;
 		_renderSamples[_sampleIndex] = renderMS;
 		_totalSamples[_sampleIndex] = totalMS;
+		_periodSamples[_sampleIndex] = periodMS;
 		_drawCallSamples[_sampleIndex] = drawCalls;
 
 		_sampleIndex = (_sampleIndex + 1) % SAMPLE_COUNT;
@@ -128,9 +135,43 @@ class FlxFrameStats
 			_sampleCount++;
 	}
 
+	public static function reset():Void
+	{
+		_sampleIndex = 0;
+		_sampleCount = 0;
+		updateMS = 0;
+		drawMS = 0;
+		renderMS = 0;
+		totalMS = 0;
+		periodMS = 0;
+	}
+
 	public static function percentileUpdate(p:Float):Float
 	{
 		return percentile(_updateSamples, _sampleCount, p);
+	}
+
+	/** Highest draw-phase sample in the current window. */
+	public static function maxDraw():Float
+	{
+		var max = 0.0;
+		for (i in 0..._sampleCount)
+		{
+			if (_drawSamples[i] > max)
+				max = _drawSamples[i];
+		}
+		return max;
+	}
+
+	public static function maxPeriod():Float
+	{
+		var max = 0.0;
+		for (i in 0..._sampleCount)
+		{
+			if (_periodSamples[i] > max)
+				max = _periodSamples[i];
+		}
+		return max;
 	}
 
 	public static function percentileDraw(p:Float):Float
@@ -146,6 +187,11 @@ class FlxFrameStats
 	public static function percentileTotal(p:Float):Float
 	{
 		return percentile(_totalSamples, _sampleCount, p);
+	}
+
+	public static function percentilePeriod(p:Float):Float
+	{
+		return percentile(_periodSamples, _sampleCount, p);
 	}
 
 	public static function maxTotal():Float

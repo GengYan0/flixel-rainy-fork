@@ -266,6 +266,11 @@ class BitmapFrontEnd
 		}
 	}
 
+	public function detachByKey(key:String):Void
+	{
+		if (key != null) removeKey(key);
+	}
+
 	public function removeIfNoUse(graphic:FlxGraphic):Void
 	{
 		if (graphic != null && graphic.useCount == 0 && !graphic.persist)

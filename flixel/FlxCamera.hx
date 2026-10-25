@@ -168,6 +168,23 @@ class FlxCamera extends FlxBasic
 	 */
 	public var bgColor:FlxColor;
 
+	public var renderInterval:Int = 1;
+	var _renderTick:Int = 0;
+
+	/** 本帧是否该真正渲染此相机（lock 内先递增 tick，render 时读同一值） */
+	public inline function renderDue():Bool
+	{
+		return renderInterval <= 1 || (_renderTick % renderInterval) == 0;
+	}
+
+	/** lock 阶段调用：递增间隔 tick，返回本帧是否该 clear+fill+render 此相机 */
+	public function stepRenderDue():Bool
+	{
+		if (renderInterval > 1)
+			_renderTick++;
+		return renderDue();
+	}
+
 	/**
 	 * Sometimes it's easier to just work with a `FlxSprite`, than it is to work directly with the `BitmapData` buffer.
 	 * This sprite reference will allow you to do exactly that.
@@ -796,6 +813,7 @@ class FlxCamera extends FlxBasic
 	public function drawPixels(?frame:FlxFrame, ?pixels:BitmapData, matrix:FlxMatrix, ?transform:ColorTransform, ?blend:BlendMode, ?smoothing:Bool = false,
 			?shader:FlxShader):Void
 	{
+		if (!renderDue()) return; // 相机渲染间隔：跳过帧不记录 draw item（canvas 保留上帧，CPU 侧矩阵/顶点也全免）
 		if (FlxG.renderBlit)
 		{
 			_helperMatrix.copyFrom(matrix);
@@ -828,6 +846,7 @@ class FlxCamera extends FlxBasic
 	public function copyPixels(?frame:FlxFrame, ?pixels:BitmapData, ?sourceRect:Rectangle, destPoint:Point, ?transform:ColorTransform, ?blend:BlendMode,
 			?smoothing:Bool = false, ?shader:FlxShader):Void
 	{
+		if (!renderDue()) return; // 相机渲染间隔：跳过帧不记录 draw item（canvas 保留上帧，CPU 侧矩阵/顶点也全免）
 		if (FlxG.renderBlit)
 		{
 			if (pixels != null)
@@ -872,6 +891,7 @@ class FlxCamera extends FlxBasic
 	public function drawTriangles(graphic:FlxGraphic, vertices:DrawData<Float>, indices:DrawData<Int>, uvtData:DrawData<Float>, ?colors:DrawData<Int>,
 			?position:FlxPoint, ?blend:BlendMode, repeat:Bool = false, smoothing:Bool = false, ?transform:ColorTransform, ?shader:FlxShader):Void
 	{
+		if (!renderDue()) return; // 相机渲染间隔：跳过帧不记录 draw item
 		final cameraBounds = _bounds.set(viewMarginLeft, viewMarginTop, viewWidth, viewHeight);
 		
 		if (FlxG.renderBlit)

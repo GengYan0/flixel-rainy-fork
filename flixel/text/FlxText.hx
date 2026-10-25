@@ -942,8 +942,21 @@ class FlxText extends FlxSprite
 		if (textField.textHeight != 0 && (oldWidth != newWidth || oldHeight != newHeight))
 		{
 			// Need to generate a new buffer to store the text graphic
+			#if rainy_fork_flixel
+			final stableKey:String = 'text_$ID';
+			final prev:FlxGraphic = FlxG.bitmap.get(stableKey);
+			if (prev != null)
+			{
+				FlxG.bitmap.detachByKey(stableKey);
+				// 只解绑不销毁：removeByKey 会 obj.destroy()，而旧图形可能仍在当前帧
+				// 的 draw stack 里，销毁后会触发 "Attempted to render an invalid FlxDrawItem"。
+				// 解绑后旧图形不再被缓存持有，由 GC 回收。
+			}
+			makeGraphic(newWidth, newHeight, FlxColor.TRANSPARENT, false, stableKey);
+			#else
 			final key:String = FlxG.bitmap.getUniqueKey("text");
 			makeGraphic(newWidth, newHeight, FlxColor.TRANSPARENT, false, key);
+			#end
 			width = Math.ceil(newWidthFloat);
 			height = Math.ceil(newHeightFloat);
 			

@@ -283,11 +283,21 @@ class CameraFrontEnd
 			if (FlxG.renderTile)
 			{
 				camera.clearDrawStack();
-				camera.canvas.graphics.clear();
-				// Clearing camera's debug sprite
-				#if FLX_DEBUG
-				camera.debugLayer.graphics.clear();
-				#end
+
+				// Render interval: on a skipped frame the canvas keeps the last executed
+				// frame and nothing is filled, so the GPU cost drops by the interval factor.
+				if (camera.stepRenderDue())
+				{
+					camera.canvas.graphics.clear();
+					// Clearing camera's debug sprite
+					#if FLX_DEBUG
+					camera.debugLayer.graphics.clear();
+					#end
+				}
+				else
+				{
+					continue;
+				}
 			}
 
 			if (FlxG.renderBlit)
@@ -309,7 +319,7 @@ class CameraFrontEnd
 		{
 			for (camera in list)
 			{
-				if ((camera != null) && camera.exists && camera.visible)
+				if ((camera != null) && camera.exists && camera.visible && camera.renderDue())
 				{
 					camera.render();
 				}
