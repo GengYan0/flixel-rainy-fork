@@ -502,6 +502,21 @@ class FlxText extends FlxSprite
 		return this;
 	}
 
+	public function forceTextUpdate():FlxText
+	{
+		if (textField == null)
+			return this;
+
+		// Forget the snapshot so updateDefaultFormat() cannot short-circuit, and re-apply the
+		// string unconditionally (bypassing set_text()'s equality guard on purpose).
+		_appliedFormat = null;
+		textField.text = text;
+		updateDefaultFormat();
+		_regen = true;
+
+		return this;
+	}
+
 	/**
 	 * You can use this if you have a lot of text parameters to set instead of the individual properties.
 	 *
@@ -1335,7 +1350,9 @@ class FlxText extends FlxSprite
 			&& a.italic == b.italic
 			&& a.underline == b.underline
 			&& a.align == b.align
-			&& a.letterSpacing == b.letterSpacing;
+			&& a.letterSpacing == b.letterSpacing
+			&& a.url == b.url
+			&& a.target == b.target;
 	}
 
 	function updateDefaultFormat():Void
@@ -1357,6 +1374,8 @@ class FlxText extends FlxSprite
 		applied.underline = _defaultFormat.underline;
 		applied.align = _defaultFormat.align;
 		applied.letterSpacing = _defaultFormat.letterSpacing;
+		applied.url = _defaultFormat.url;
+		applied.target = _defaultFormat.target;
 
 		_regen = true;
 	}
