@@ -1,0 +1,72 @@
+# Rainy fork of HaxeFlixel 6.2.0
+
+Upstream: [HaxeFlixel/flixel](https://github.com/HaxeFlixel/flixel) 6.2.0, MIT.
+The base is imported as a single commit — the whole tree is present, upstream
+history is not.
+
+## What differs from upstream
+
+Perf work and instrumentation for the Rainy engine. Every commit says why; short
+version:
+
+### FlxFrameStats
+Frame timing split into update / draw / render with p50/p99 percentiles, plus
+per-frame `drawCalls`. Upstream counted draw calls with `++` and never reset
+them, so every reader was looking at a since-launch total. `beginFrame()` now
+zeroes them *before* the `if (!enabled) return`, so the numbers are correct even
+with instrumentation off.
+
+`periodMS` is the wall-clock frame interval — it contains present, the driver and
+the frame limiter's sleep. `totalMS` is only update+draw+render work. Diagnosing
+"work is 2.2 ms but I only get 170 fps" is a `percentilePeriod` question, not a
+`totalMS` one.
+
+### FlxCamera
+- `renderInterval` throttles a camera to every N frames. `stepRenderDue()`
+  advances the tick *before* deciding, otherwise `renderInterval = 2` skips the
+  very first frame (tick 0 → 1, and 1 is not a multiple of 2) and a fresh
+  throttled camera renders an empty canvas.
+- `sortDrawItems` clusters the draw stack by texture to cut state changes.
+  Default off, needs A/B against real scenes. `stableSortDrawStack` rebuilds the
+  chain and moves `_currentDrawItem` to the new tail; leaving it on the pre-sort
+  tail made any post-`render()` append splice into the middle of the new order
+  and orphan everything behind it.
+
+### FlxText
+`updateDefaultFormat` compares against an `_appliedFormat` snapshot; `set_text`
+returns early on an identical value; `set_alignment` compares before assigning.
+Re-asserting an unchanged format used to re-rasterise the glyph bitmap every
+frame. The snapshot covers `leading` / `indent` / `blockIndent` / `bullet` /
+`kerning` too — those have no setter here, so `defaultTextFormat` is the only
+route to them and a missed field made the change a silent no-op.
+
+### Smaller
+- `FlxMouseEventManager` uses frame stamps (`_overEpoch` / `_wasOverPrev` /
+  `_clickGen`) instead of allocating a fresh `Array` per frame and scanning it
+  O(n²). `_overList` must be committed before any `return`, or over state freezes
+  once the mouse is disabled.
+- `FlxDrawQuadsItem` / `FlxDrawTrianglesItem` `reset()` uses `resize(0)`;
+  `splice(0, len)` allocated an equal-length copy on every call.
+- `FlxPool.put` scans `[0, _count)`. The backing array only grows, so `indexOf`
+  over the whole thing charges for the historical peak and can match an object
+  that was already taken out.
+- `FlxPointer` guards against an empty camera list.
+- `extraParams.hxml` defines `rainy_fork_flixel` so engine code can `#if` on the
+  fork instead of guessing from the version number.
+
+## Install
+
+```bash
+haxelib git flixel https://github.com/GengYan0/flixel-rainy-fork
+```
+
+The renderer-side fixes live in the OpenFL fork; use the pair together:
+
+```bash
+haxelib git openfl https://github.com/GengYan0/openfl-rainy-fork
+haxelib git lime    https://github.com/GengYan0/lime-rainy-fork
+```
+
+`haxelib git` drops the checkout under `<haxelib>/git/<name>`. If a released
+version of the same library is already installed, remove it first — haxelib
+resolves one version per library name.
