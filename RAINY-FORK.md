@@ -56,6 +56,31 @@ returns a label to it before any edit touches pixels. A label that was never
 rasterised locally has no canvas at all — it reports `oldWidth = 0`, which forces
 the "make a new buffer" branch, so it still ends up with one.
 
+### FlxSprite skew
+`skewX` / `skewY` in degrees, applied by `applySkew()` inside
+`prepareComplexMatrix`. flixel has no shear at all: `angle` rotates, `scale`
+stretches, and neither can make an arrow lean while its vertical edges stay
+vertical, which is what modcharts ask for.
+
+The placement is the whole point. openfl's `Matrix` is row-vector with right
+multiplication, so every helper appends an *inner* transform and the last call
+acts on texture coordinates first. The shear sits between the origin shift and
+the `scale` call:
+
+- after `scale` the lean would be measured in screen pixels, so a sprite drawn at
+  an uneven scale would shear by the wrong visual angle;
+- after `rotateWithTrig` it would be measured in screen axes, so a rotated arrow
+  would lean across its own edges instead of along them.
+
+The six components are written directly — the product of a shear and an affine
+matrix is closed form, and routing it through a temporary 3×3 multiply would cost
+more than the four additions it saves. Angles clamp to ±80°, because the tangent
+runs away towards 90° and a degenerate shear collapses the sprite to a line.
+
+`draw()` skips `drawSimple` while either axis is off zero: a sheared quad cannot
+be blitted. Sprites that never set skew are unaffected beyond one comparison per
+camera.
+
 ### Smaller
 - `FlxMouseEventManager` uses frame stamps (`_overEpoch` / `_wasOverPrev` /
   `_clickGen`) instead of allocating a fresh `Array` per frame and scanning it

@@ -265,6 +265,10 @@ class FlxSprite extends FlxObject
 	public var angleFactor:Float = 1;
 
 	public var angleFactorEnabled:Bool = true;
+
+	public var skewX:Float = 0;
+
+	public var skewY:Float = 0;
 	
 	/**
 	 * Multiplies this sprite's image by the given red, green and blue components, alpha is ignored.
@@ -975,8 +979,9 @@ class FlxSprite extends FlxObject
 				continue;
 			
 			// A camera-relative correction needs the full matrix, so the cheap blit path
-			// is skipped only while a factor is actually doing something.
-			if (isSimpleRender(camera) && !hasViewFactors())
+			// is skipped only while a factor is actually doing something. Shear is in the
+			// same boat: there is no way to blit a sheared quad.
+			if (isSimpleRender(camera) && !hasViewFactors() && !hasSkew())
 				drawSimple(camera);
 			else
 				drawComplex(camera);
@@ -1042,6 +1047,17 @@ class FlxSprite extends FlxObject
 	{
 		frame.prepareMatrix(matrix, FlxFrameAngle.ANGLE_0, checkFlipX(), checkFlipY());
 		matrix.translate(-origin.x, -origin.y);
+		
+		// Shear goes here, between the origin shift and the scale, and the position matters.
+		// `Matrix` in openfl is row-vector with right multiplication, so each call appends
+		// an inner transform: whatever is applied last acts on the texture coordinates
+		// first. Inserting after `scale` would put the shear outside the scaling - the lean
+		// would then be measured in screen pixels and a scaled sprite would shear by a
+		// different visual angle - and inserting after `rotateWithTrig` would measure it in
+		// screen axes, so a rotated arrow would shear sideways instead of along its edges.
+		if (hasSkew())
+			applySkew(matrix);
+		
 		matrix.scale(scale.x, scale.y);
 		
 		if (bakedRotationAngle <= 0)
@@ -1074,6 +1090,35 @@ class FlxSprite extends FlxObject
 	public inline function hasViewFactors():Bool
 	{
 		return (zoomFactorEnabled && zoomFactor != 1) || (angleFactorEnabled && angleFactor != 1);
+	}
+	
+	public inline function hasSkew():Bool
+	{
+		return skewX != 0 || skewY != 0;
+	}
+	
+	public function applySkew(matrix:FlxMatrix):Void
+	{
+		final limit = 80 * FlxAngle.TO_RAD;
+		if (skewX != 0)
+		{
+			final k = Math.tan(Math.max(-limit, Math.min(limit, skewX * FlxAngle.TO_RAD)));
+			final a = matrix.a;
+			final c = matrix.c;
+			matrix.a = a + k * matrix.b;
+			matrix.c = c + k * matrix.d;
+			matrix.tx += k * matrix.ty;
+		}
+		
+		if (skewY != 0)
+		{
+			final k = Math.tan(Math.max(-limit, Math.min(limit, skewY * FlxAngle.TO_RAD)));
+			final b = matrix.b;
+			final d = matrix.d;
+			matrix.b = b + k * matrix.a;
+			matrix.d = d + k * matrix.c;
+			matrix.ty += k * matrix.tx;
+		}
 	}
 	
 	public function applyViewFactors(matrix:FlxMatrix, camera:FlxCamera):Void
