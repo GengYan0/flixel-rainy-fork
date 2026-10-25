@@ -1,12 +1,12 @@
 {
 	"name": "flixel",
-	"url" : "https://github.com/HaxeFlixel/flixel",
+	"url" : "https://github.com/GengYan0/flixel-rainy-fork",
 	"license": "MIT",
 	"tags": ["game", "openfl", "flash", "html5", "neko", "cpp", "android", "ios", "cross"],
-	"description": "Fork of HaxeFlixel 6.2.0 with engine instrumentation and renderer extensions (rainy engine). Based on HaxeFlixel/flixel (MIT).",
+	"description": "HaxeFlixel 6.2.0 build with frame timing, camera render throttling, layer compositing, a shared text atlas, sprite skew and an atlas format registry.",
 	"version": "6.2.0",
-	"releasenote": "Fork: P1 FlxFrameStats frame-time instrumentation (update/draw/render split, p50/p99 percentiles, draw call exposure). Upstream: Sound refactor, FlxMatrixSprite and tilemap ray methods",
-	"contributors": ["haxeflixel", "Gama11", "GeoKureli"],
+	"releasenote": "Frame stats with p50/p99, camera renderInterval, seven composite blend modes, textPager, skewX/skewY, FlxAtlasFrames.registerFormat, restored FlxTrail.",
+	"contributors": ["RainyEngine"],
 	"dependencies": {
 		"lime": "",
 		"openfl": ""
