@@ -40,6 +40,22 @@ frame. The snapshot covers `leading` / `indent` / `blockIndent` / `bullet` /
 `kerning` too — those have no setter here, so `defaultTextFormat` is the only
 route to them and a missed field made the change a silent no-op.
 
+`FlxText.textPager` is an optional shared-texture sink (`FlxTextPager`). Null by
+default, and with it null every line below is dead code. When a pager is
+installed, `regenGraphic()` asks it *before* rasterising — a hit skips the whole
+`TextField` pass — and offers it the finished bitmap afterwards. The text keeps
+its own canvas either way, so the pixels are unchanged; only which texture a
+label draws from moves, which is what lets flixel batch thirty labels into one
+draw call.
+
+The reason this needs a fork rather than a subclass: `regenGraphic()` paints into
+`graphic.bitmap` and clears it with `fillRect` on the "same size" path. Once a
+label draws from a shared page, that `fillRect` would erase every other label on
+the page. So the canvas is tracked separately in `_canvas`, and `detachPager()`
+returns a label to it before any edit touches pixels. A label that was never
+rasterised locally has no canvas at all — it reports `oldWidth = 0`, which forces
+the "make a new buffer" branch, so it still ends up with one.
+
 ### Smaller
 - `FlxMouseEventManager` uses frame stamps (`_overEpoch` / `_wasOverPrev` /
   `_clickGen`) instead of allocating a fresh `Array` per frame and scanning it

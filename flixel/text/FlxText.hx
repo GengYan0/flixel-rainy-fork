@@ -25,6 +25,9 @@ using flixel.util.FlxStringUtil;
 #if flash
 import openfl.geom.Rectangle;
 #end
+#if rainy_fork_flixel
+import flixel.text.FlxTextPager.FlxTextPagerSlot;
+#end
 
 // TODO: think about filters and text
 
@@ -43,6 +46,15 @@ class FlxText extends FlxSprite
 	 * 4px gutter at the bottom when the field has automatic height
 	 */
 	static inline var VERTICAL_GUTTER:Int = 4;
+
+	#if rainy_fork_flixel
+
+	public static var textPager:FlxTextPager = null;
+
+	var _canvas:FlxGraphic;
+
+	var _pagerSlot:FlxTextPagerSlot;
+	#end
 
 	/**
 	 * The text being displayed.
@@ -262,6 +274,10 @@ class FlxText extends FlxSprite
 		_formatAdjusted = null;
 		_shadowOffset = FlxDestroyUtil.put(_shadowOffset);
 		_graphicOffset = FlxDestroyUtil.put(_graphicOffset);
+		#if rainy_fork_flixel
+		_canvas = null;
+		_pagerSlot = null;
+		#end
 		super.destroy();
 	}
 
@@ -941,9 +957,41 @@ class FlxText extends FlxSprite
 			return;
 		
 		_regen = false;
+
+		#if rainy_fork_flixel
+		// Any edit has to paint into a canvas this text owns. If the pager redirected the
+		// last version to a shared page, step off it first — filling a page with
+		// transparent pixels would erase every other label sharing it.
+		detachPager();
+
+		if (textPager != null)
+		{
+			final pageKey:String = pagerKey();
+			if (pageKey != null)
+			{
+				final hit:FlxTextPagerSlot = textPager.find(pageKey);
+				if (hit != null)
+				{
+					// No canvas is allocated on this path, so record that fact: oldWidth 0
+					// forces the next edit through the "make a new buffer" branch.
+					_canvas = null;
+					_pagerSlot = hit;
+					frames = hit.frames;
+					animation.frameIndex = hit.index;
+					_regen = false;
+					return;
+				}
+			}
+		}
+		#end
 		
-		final oldWidth:Int = graphic != null ? graphic.width : 0;
-		final oldHeight:Int = graphic != null ? graphic.height : VERTICAL_GUTTER;
+		#if rainy_fork_flixel
+		var canvas:FlxGraphic = _canvas;
+		#else
+		var canvas:FlxGraphic = graphic;
+		#end
+		final oldWidth:Int = canvas != null ? canvas.width : 0;
+		final oldHeight:Int = canvas != null ? canvas.height : VERTICAL_GUTTER;
 		
 		final newWidthFloat:Float = textField.width;
 		final newHeightFloat:Float = _autoHeight ? textField.textHeight + VERTICAL_GUTTER : textField.height;
@@ -975,7 +1023,13 @@ class FlxText extends FlxSprite
 		final newHeight:Int = Math.ceil(newHeightFloat + borderHeight);
 		
 		// prevent text height from shrinking on flash if text == ""
+		#if rainy_fork_flixel
+		// `canvas == null` means the pager drew the last version and no buffer was ever
+		// made for this text, so a buffer is mandatory here even for an empty string.
+		if (canvas == null || (textField.textHeight != 0 && (oldWidth != newWidth || oldHeight != newHeight)))
+		#else
 		if (textField.textHeight != 0 && (oldWidth != newWidth || oldHeight != newHeight))
+		#end
 		{
 			// Need to generate a new buffer to store the text graphic
 			#if rainy_fork_flixel
@@ -989,10 +1043,16 @@ class FlxText extends FlxSprite
 				// "Attempted to render an invalid FlxDrawItem". Once detached nothing in the
 				// cache holds it, so the GC can reclaim it.
 			}
-			makeGraphic(newWidth, newHeight, FlxColor.TRANSPARENT, false, stableKey);
+			// An empty string reports a zero-width field; a zero-sized BitmapData is an
+			// error on some backends, and nothing is drawn into it either way.
+			makeGraphic(newWidth < 1 ? 1 : newWidth, newHeight < 1 ? 1 : newHeight, FlxColor.TRANSPARENT, false, stableKey);
 			#else
 			final key:String = FlxG.bitmap.getUniqueKey("text");
 			makeGraphic(newWidth, newHeight, FlxColor.TRANSPARENT, false, key);
+			#end
+			canvas = graphic;
+			#if rainy_fork_flixel
+			_canvas = graphic;
 			#end
 			width = Math.ceil(newWidthFloat);
 			height = Math.ceil(newHeightFloat);
@@ -1014,7 +1074,7 @@ class FlxText extends FlxSprite
 		}
 		else // Else just clear the old buffer before redrawing the text
 		{
-			graphic.bitmap.fillRect(_flashRect, FlxColor.TRANSPARENT);
+			canvas.bitmap.fillRect(_flashRect, FlxColor.TRANSPARENT);
 			if (_hasBorderAlpha)
 			{
 				if (_borderPixels == null)
@@ -1035,11 +1095,73 @@ class FlxText extends FlxSprite
 			applyBorderTransparency();
 			applyFormats(_formatAdjusted, false);
 
-			drawTextFieldTo(graphic.bitmap);
+			drawTextFieldTo(canvas.bitmap);
 		}
 		
+		#if rainy_fork_flixel
+		// Offer the finished pixels to the shared pages. This never changes how `this`
+		// looks: the text keeps drawing from its own canvas, and the copy is only there
+		// for the next label asking for the same string.
+		storeInPager();
+		#end
+
 		resetFrame();
 	}
+
+	#if rainy_fork_flixel
+
+	function detachPager():Void
+	{
+		if (_pagerSlot == null)
+			return;
+
+		_pagerSlot = null;
+
+		// Without a canvas of our own there is nothing to step back to; leaving `frames`
+		// on the page is safe because the next edit is forced through the "make a new
+		// buffer" branch, which replaces `frames` outright.
+		if (_canvas != null)
+			frames = _canvas.imageFrame;
+	}
+
+	function pagerKey():String
+	{
+		if (text == null || text.length == 0)
+			return null;
+
+		// Borders draw outside the layout box, and this fork has no way to describe the
+		// result in a key. Cheap to exclude: bordered labels are a minority.
+		if (borderStyle != NONE)
+			return null;
+
+		if (_formatRanges != null && _formatRanges.length > 0)
+			return null;
+
+		// Multi-line labels are paragraphs, not labels; caching them would fill a page with
+		// one string. Single lines are what a menu asks for over and over.
+		if (text.indexOf("\n") >= 0)
+			return null;
+
+		// `fieldWidth` is in the key rather than filtered out: a fixed-width label wraps at
+		// that width, so two labels only share pixels when they also share the width.
+		return font + "|" + size + "|" + color + "|" + (bold ? 1 : 0) + "|" + (italic ? 1 : 0)
+			+ "|" + (underline ? 1 : 0) + "|" + letterSpacing + "|" + alignment + "|" + (antialiasing ? 1 : 0)
+			+ "|" + (_autoHeight ? 1 : 0) + "|" + fieldWidth + "|" + text;
+	}
+
+	function storeInPager():Void
+	{
+		final sink:FlxTextPager = textPager;
+		if (sink == null || _canvas == null || _pagerSlot != null)
+			return;
+
+		final pageKey:String = pagerKey();
+		if (pageKey == null)
+			return;
+
+		sink.store(pageKey, _canvas.bitmap);
+	}
+	#end
 
 	/**
 	 * Internal function to draw textField to a BitmapData, if flash it calculates every line x to avoid blurry lines.
