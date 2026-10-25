@@ -1353,7 +1353,15 @@ class FlxText extends FlxSprite
 			&& a.align == b.align
 			&& a.letterSpacing == b.letterSpacing
 			&& a.url == b.url
-			&& a.target == b.target;
+			&& a.target == b.target
+			// Layout-affecting fields. They have no FlxText setter, so the only way to reach
+			// them is through `defaultTextFormat`; leaving them out of this comparison made
+			// such a change a silent no-op because the snapshot looked identical.
+			&& a.leading == b.leading
+			&& a.indent == b.indent
+			&& a.blockIndent == b.blockIndent
+			&& a.bullet == b.bullet
+			&& a.kerning == b.kerning;
 	}
 
 	function updateDefaultFormat():Void
@@ -1377,6 +1385,11 @@ class FlxText extends FlxSprite
 		applied.letterSpacing = _defaultFormat.letterSpacing;
 		applied.url = _defaultFormat.url;
 		applied.target = _defaultFormat.target;
+		applied.leading = _defaultFormat.leading;
+		applied.indent = _defaultFormat.indent;
+		applied.blockIndent = _defaultFormat.blockIndent;
+		applied.bullet = _defaultFormat.bullet;
+		applied.kerning = _defaultFormat.kerning;
 
 		_regen = true;
 	}

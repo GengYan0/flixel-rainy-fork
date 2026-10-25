@@ -149,6 +149,9 @@ class FlxFrameStats
 		renderMS = 0;
 		totalMS = 0;
 		periodMS = 0;
+		// Without this the first period after a reset spans from the last measured frame to
+		// now — minutes if timing was disabled in between — and p99 reports that as a hitch.
+		_prevFrameT0 = -1;
 	}
 
 	public static function percentileUpdate(p:Float):Float

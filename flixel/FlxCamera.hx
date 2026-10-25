@@ -178,9 +178,13 @@ class FlxCamera extends FlxBasic
 
 	public function stepRenderDue():Bool
 	{
+		// Decide before advancing. Advancing first meant `renderInterval = 2` skipped the
+		// very first frame (tick 0 became 1, and 1 is not a multiple of 2), so a freshly
+		// created throttled camera showed an empty canvas until the second frame.
+		final due = renderDue();
 		if (renderInterval > 1)
 			_renderTick++;
-		return renderDue();
+		return due;
 	}
 
 	/**
@@ -750,7 +754,18 @@ class FlxCamera extends FlxBasic
 		flashSprite.filters = filtersEnabled ? filters : null;
 
 		if (sortDrawItems && _headOfDrawStack != null)
+		{
 			_headOfDrawStack = stableSortDrawStack(_headOfDrawStack);
+
+			// Reordering moves the tail. `_currentDrawItem` is the append cursor used by
+			// `startQuadBatch`/`startTrianglesBatch`, and it still points at the pre-sort
+			// tail — an item drawn after `render()` would then splice itself into the
+			// middle of the rebuilt chain and orphan everything behind it.
+			var tail:FlxDrawBaseItem<Dynamic> = _headOfDrawStack;
+			while (tail.next != null)
+				tail = tail.next;
+			_currentDrawItem = tail;
+		}
 
 		var currItem:FlxDrawBaseItem<Dynamic> = _headOfDrawStack;
 		while (currItem != null)
