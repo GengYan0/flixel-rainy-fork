@@ -1730,6 +1730,12 @@ class FlxCamera extends FlxBasic
 		}
 		else
 		{
+			// A fully transparent fill over an already-cleared canvas cannot change a pixel,
+			// but it still costs a GraphicsSolidFill, a path, and a full-viewport retessellation
+			// every frame. Overlay cameras that keep `bgColor` at alpha 0 hit this on every frame.
+			if (FxAlpha <= 0)
+				return;
+
 			final targetGraphics = (graphics == null) ? canvas.graphics : graphics;
 
 			targetGraphics.overrideBlendMode(null);

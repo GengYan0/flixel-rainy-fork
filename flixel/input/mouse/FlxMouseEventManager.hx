@@ -35,6 +35,13 @@ class FlxMouseEventManager extends FlxBasic
 	@:noCompletion
 	var _point:FlxPoint = FlxPoint.get();
 
+	var _overScratch:Array<FlxMouseEvent<FlxObject>> = [];
+
+	var _epoch:Int = 0;
+	var _lastEpoch:Int = -1;
+
+	var _clickGen:Int = 0;
+
 	/**
 	 * The maximum amount of time between two clicks that is considered a double click, in milliseconds.
 	 * @since 4.4.0
@@ -51,6 +58,7 @@ class FlxMouseEventManager extends FlxBasic
 		}
 		_list = new Array<FlxMouseEvent<FlxObject>>();
 		_overList = new Array<FlxMouseEvent<FlxObject>>();
+		_overScratch = new Array<FlxMouseEvent<FlxObject>>();
 		_downList = new Array<FlxMouseEvent<FlxObject>>();
 		_clickList = new Array<FlxMouseEvent<FlxObject>>();
 
@@ -69,7 +77,19 @@ class FlxMouseEventManager extends FlxBasic
 	{
 		super.update(elapsed);
 
-		var currentOverObjects = new Array<FlxMouseEvent<FlxObject>>();
+		// Nothing registered: no callbacks can fire, so skip the whole scan instead of
+		// allocating a buffer and walking an empty list.
+		if (_list.length == 0)
+		{
+			_overList.resize(0);
+			return;
+		}
+
+		_lastEpoch = _epoch++;
+
+		final prev = _overList;
+		final current = _overScratch;
+		current.resize(0);
 
 		for (event in _list)
 		{
@@ -80,7 +100,11 @@ class FlxMouseEventManager extends FlxBasic
 
 			if (checkOverlap(event))
 			{
-				currentOverObjects.push(event);
+				// Stamp membership: `_wasOverPrev` answers "was this in last frame's over list",
+				// `_overEpoch` answers "is this in this frame's over list" — both O(1).
+				event._wasOverPrev = (event._overEpoch == _lastEpoch);
+				event._overEpoch = _epoch;
+				current.push(event);
 
 				if (!event.mouseChildren)
 				{
@@ -90,13 +114,13 @@ class FlxMouseEventManager extends FlxBasic
 		}
 
 		// MouseOut - Look for objects that lost mouse over.
-		for (over in _overList)
+		for (over in prev)
 		{
 			if (over.onMouseOut != null)
 			{
 				// slightly different logic here - objects whose exists or visible
 				// property has been set to false should also receive a mouse out!
-				if (!over.object.exists || !over.object.visible || get(over.object, currentOverObjects) == null)
+				if (!over.object.exists || !over.object.visible || over._overEpoch != _epoch)
 				{
 					over.onMouseOut(over.object);
 				}
@@ -104,16 +128,23 @@ class FlxMouseEventManager extends FlxBasic
 		}
 
 		// MouseOver - Look for new objects with mouse over.
-		for (current in currentOverObjects)
+		for (cur in current)
 		{
-			if (current.onMouseOver != null)
+			if (cur.onMouseOver != null)
 			{
-				if (current.object.exists && current.object.visible && get(current.object, _overList) == null)
+				if (cur.object.exists && cur.object.visible && !cur._wasOverPrev)
 				{
-					current.onMouseOver(current.object);
+					cur.onMouseOver(cur.object);
 				}
 			}
 		}
+
+		// Commit the over set before any early return below. It used to be assigned at the very
+		// end, so returning on a disabled mouse left `_overList` frozen at an old frame and the
+		// next frame's over/out diff was computed against stale data.
+		_overList = current;
+		_overScratch = prev;
+		prev.resize(0);
 
 		#if FLX_MOUSE
 		// If mouse input is not enabled globally, prevent all tracked objects from responding to
@@ -124,25 +155,25 @@ class FlxMouseEventManager extends FlxBasic
 		// MouseMove - Look for objects with mouse over that have mouseMove callbacks
 		if (FlxG.mouse.justMoved)
 		{
-			for (current in currentOverObjects)
+			for (cur in current)
 			{
-				if (current.onMouseMove != null && current.object.exists && current.object.visible)
+				if (cur.onMouseMove != null && cur.object.exists && cur.object.visible)
 				{
-					current.onMouseMove(current.object);
+					cur.onMouseMove(cur.object);
 				}
 			}
 		}
 
 		// MouseDown - Look for objects with mouse over when user presses mouse button.
-		for (current in currentOverObjects)
+		for (cur in current)
 		{
-			if (current.onMouseDown != null && current.object.exists && current.object.visible)
+			if (cur.onMouseDown != null && cur.object.exists && cur.object.visible)
 			{
-				for (buttonID in current.mouseButtons)
+				for (buttonID in cur.mouseButtons)
 				{
 					if (FlxMouseButton.getByID(buttonID).justPressed)
 					{
-						current.onMouseDown(current.object);
+						cur.onMouseDown(cur.object);
 					}
 				}
 			}
@@ -151,27 +182,27 @@ class FlxMouseEventManager extends FlxBasic
 		// MouseClick/MouseDoubleClick - Look for objects with mouse down first.
 		if (FlxG.mouse.justPressed)
 		{
-			for (current in currentOverObjects)
+			for (cur in current)
 			{
-				if ((current.onMouseClick != null || current.onMouseDoubleClick != null)
-					&& current.object.exists
-					&& current.object.visible)
+				if ((cur.onMouseClick != null || cur.onMouseDoubleClick != null)
+					&& cur.object.exists
+					&& cur.object.visible)
 				{
-					_downList.push(current);
+					_downList.push(cur);
 				}
 			}
 		}
 
 		// MouseUp - Look for objects with mouse over when user releases mouse button.
-		for (current in currentOverObjects)
+		for (cur in current)
 		{
-			if (current.onMouseUp != null && current.object.exists && current.object.visible)
+			if (cur.onMouseUp != null && cur.object.exists && cur.object.visible)
 			{
-				for (buttonID in current.mouseButtons)
+				for (buttonID in cur.mouseButtons)
 				{
 					if (FlxMouseButton.getByID(buttonID).justReleased)
 					{
-						current.onMouseUp(current.object);
+						cur.onMouseUp(cur.object);
 					}
 				}
 			}
@@ -181,26 +212,26 @@ class FlxMouseEventManager extends FlxBasic
 		// DoubleClick - Look for objects that were recently clicked and have just been clicked again.
 		if (_clickList.length > 0 && FlxG.game.ticks - mouseClickedTime > maxDoubleClickDelay)
 		{
-			_clickList = [];
+			_clickList.resize(0);
+			_clickGen++;
 		}
 
 		if (FlxG.mouse.justReleased)
 		{
 			mouseClickedTime = FlxG.game.ticks;
 
-			var previousClickedObjects = _clickList;
-
-			if (_clickList.length > 0)
-			{
-				_clickList = [];
-			}
+			// Entries pushed on a previous release carry the old generation; starting a new one
+			// here replaces the old `previousClickedObjects` array without allocating.
+			final prevClickGen = _clickGen;
+			_clickList.resize(0);
+			_clickGen++;
 
 			for (down in _downList)
 			{
 				if (down.object != null
 					&& down.object.exists
 					&& down.object.visible
-					&& get(down.object, currentOverObjects) != null)
+					&& down._overEpoch == _epoch)
 				{
 					if (down.onMouseClick != null)
 					{
@@ -209,12 +240,13 @@ class FlxMouseEventManager extends FlxBasic
 
 					if (down.onMouseDoubleClick != null)
 					{
-						if (get(down.object, previousClickedObjects) != null)
+						if (down._clickEpoch == prevClickGen)
 						{
 							down.onMouseDoubleClick(down.object);
 						}
 						else
 						{
+							down._clickEpoch = _clickGen;
 							_clickList.push(down);
 						}
 					}
@@ -225,23 +257,21 @@ class FlxMouseEventManager extends FlxBasic
 		if (_downList.length > 0 && !FlxG.mouse.pressed)
 		{
 			// if the user just released the mouse OR if the user released the mouse while the window was tabbed out
-			_downList = [];
+			_downList.resize(0);
 		}
 
 		// MouseWheel - Look for objects with mouse over when user spins the mouse wheel.
 		if (FlxG.mouse.wheel != 0)
 		{
-			for (current in currentOverObjects)
+			for (cur in current)
 			{
-				if (current.onMouseWheel != null && current.object.exists && current.object.visible)
+				if (cur.onMouseWheel != null && cur.object.exists && cur.object.visible)
 				{
-					current.onMouseWheel(current.object);
+					cur.onMouseWheel(cur.object);
 				}
 			}
 		}
 		#end
-
-		_overList = currentOverObjects;
 	}
 
 	function addEvent<T:FlxObject>(event:FlxMouseEvent<T>):FlxMouseEvent<T>
@@ -294,13 +324,18 @@ class FlxMouseEventManager extends FlxBasic
 	 */
 	public function remove<T:FlxObject>(object:T):T
 	{
-		for (event in _list)
+		// Iterate backwards: removing while iterating forward shifts the array under the
+		// cursor and silently skips the next element.
+		var i = _list.length - 1;
+		while (i >= 0)
 		{
+			final event = _list[i];
 			if (event.object == object)
 			{
 				event.destroy();
-				_list.remove(event);
+				_list.splice(i, 1);
 			}
+			i--;
 		}
 		return object;
 	}
@@ -310,18 +345,19 @@ class FlxMouseEventManager extends FlxBasic
 	 */
 	public function removeAll():Void
 	{
-		if (_list != null)
+		if (_list == null)
+			return;
+
+		for (event in _list)
 		{
-			for (event in _list)
-			{
-				event.destroy();
-			}
+			event.destroy();
 		}
 
-		_list.splice(0, _list.length);
-		_overList = [];
-		_downList = [];
-		_clickList = [];
+		_list.resize(0);
+		_overList.resize(0);
+		_downList.resize(0);
+		_clickList.resize(0);
+		_clickGen++;
 	}
 
 	/**
@@ -625,6 +661,7 @@ class FlxMouseEventManager extends FlxBasic
 	function clearRegistry():Void
 	{
 		_overList = null;
+		_overScratch = null;
 		_downList = null;
 		_clickList = null;
 		_list = FlxDestroyUtil.destroyArray(_list);

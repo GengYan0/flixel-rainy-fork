@@ -179,6 +179,8 @@ class FlxText extends FlxSprite
 	var _formatRanges:Array<FlxTextFormatRange> = [];
 	var _font:String;
 
+	var _appliedFormat:TextFormat;
+
 	/**
 	 * Helper boolean which tells whether to update graphic of this text object or not.
 	 */
@@ -256,6 +258,7 @@ class FlxText extends FlxSprite
 		textField = null;
 		_font = null;
 		_defaultFormat = null;
+		_appliedFormat = null;
 		_formatAdjusted = null;
 		_shadowOffset = FlxDestroyUtil.put(_shadowOffset);
 		_graphicOffset = FlxDestroyUtil.put(_graphicOffset);
@@ -490,6 +493,10 @@ class FlxText extends FlxSprite
 	public function clearFormats():FlxText
 	{
 		_formatRanges = [];
+
+		// Dropping ranges changes the output even when `_defaultFormat` is untouched, so this
+		// cannot rely on updateDefaultFormat()'s no-op guard to set _regen.
+		_regen = true;
 		updateDefaultFormat();
 
 		return this;
@@ -642,14 +649,21 @@ class FlxText extends FlxSprite
 	function set_text(value:String):String
 	{
 		// TODO: Remove if and let it crash on 7.0.0
-		if (textField != null)
+		if (textField == null)
 		{
-			_regen = _regen || (this.text != value);
-			textField.text = value;
-		}
-		else
 			FlxG.log.error("Cannot set text of destroyed FlxText");
-		
+			return this.text = value;
+		}
+
+		// Assigning `textField.text` rebuilds the field's text layout even when the string is
+		// unchanged. `_regen` was already guarded, but the assignment itself was not, so a label
+		// reasserting its own text every frame (immediate-mode UI) still paid a full re-layout.
+		if (this.text == value)
+			return value;
+
+		_regen = true;
+		textField.text = value;
+
 		return this.text = value;
 	}
 
@@ -829,7 +843,14 @@ class FlxText extends FlxSprite
 
 	function set_alignment(Alignment:FlxTextAlign):FlxTextAlign
 	{
-		_defaultFormat.align = FlxTextAlign.toOpenFL(Alignment);
+		final openflAlign = FlxTextAlign.toOpenFL(Alignment);
+
+		// Every other format setter already skipped when unchanged; this one did not, which
+		// made `text.alignment = text.alignment` a full re-rasterization per frame.
+		if (_defaultFormat.align == openflAlign)
+			return Alignment;
+
+		_defaultFormat.align = openflAlign;
 		updateDefaultFormat();
 		return Alignment;
 	}
@@ -1303,10 +1324,40 @@ class FlxText extends FlxSprite
 		return new TextFormat(dtf.font, dtf.size, dtf.color, dtf.bold, dtf.italic, dtf.underline, dtf.url, dtf.target, dtf.align);
 	}
 
-	inline function updateDefaultFormat():Void
+	static inline function sameFormat(a:TextFormat, b:TextFormat):Bool
 	{
+		return a != null
+			&& b != null
+			&& a.font == b.font
+			&& a.size == b.size
+			&& a.color == b.color
+			&& a.bold == b.bold
+			&& a.italic == b.italic
+			&& a.underline == b.underline
+			&& a.align == b.align
+			&& a.letterSpacing == b.letterSpacing;
+	}
+
+	function updateDefaultFormat():Void
+	{
+		if (sameFormat(_defaultFormat, _appliedFormat))
+			return;
+
 		textField.defaultTextFormat = _defaultFormat;
 		textField.setTextFormat(_defaultFormat);
+
+		if (_appliedFormat == null)
+			_appliedFormat = new TextFormat();
+		final applied = _appliedFormat;
+		applied.font = _defaultFormat.font;
+		applied.size = _defaultFormat.size;
+		applied.color = _defaultFormat.color;
+		applied.bold = _defaultFormat.bold;
+		applied.italic = _defaultFormat.italic;
+		applied.underline = _defaultFormat.underline;
+		applied.align = _defaultFormat.align;
+		applied.letterSpacing = _defaultFormat.letterSpacing;
+
 		_regen = true;
 	}
 

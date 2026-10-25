@@ -361,7 +361,12 @@ class FlxBitmapText extends FlxSprite
 				clippedFrameRect.clipTo(clipRect);
 
 			if (clippedFrameRect.isEmpty)
+			{
+				// Was a bare `return`, leaking the pooled rect on every draw while the text
+				// is fully clipped (scrolled out of a list, for instance).
+				clippedFrameRect.put();
 				return;
+			}
 			
 			final charClipHelper = FlxRect.get();
 			final charClippedFrame = frameDrawHelper;
@@ -406,31 +411,15 @@ class FlxBitmapText extends FlxSprite
 				
 				final hasColorOffsets = (colorTransform != null && colorTransform.hasRGBAOffsets());
 				final drawItem = camera.startQuadBatch(font.parent, true, hasColorOffsets, blend, antialiasing, shader);
-				function addQuad(charCode:Int, x:Float, y:Float, color:ColorTransform)
-				{
-					var frame = font.getCharFrame(charCode);
-					if (clipRect != null)
-					{
-						charClipHelper.copyFrom(clippedFrameRect).offset(-x, -y);
-						if (!frame.isContained(charClipHelper))
-							frame = frame.clipTo(charClipHelper, charClippedFrame);
-					}
-					
-					final matrix = matrixDrawHelper;
-					frame.prepareMatrix(matrix);
-					matrix.translate(x - originX, y - originY);
-					matrix.scale(scaleX, scaleY);
-					if (angle != 0)
-					{
-						matrix.rotateWithTrig(_cosAngle, _sinAngle);
-					}
-					
-					matrix.translate(screenPos.x + originX, screenPos.y + originY);
-					drawItem.addQuad(frame, matrix, color);
-				}
-				
-				borderDrawData.forEach(addQuad.bind(_, _, _, borderColorTransform));
-				textDrawData.forEach(addQuad.bind(_, _, _, textColorTransform));
+
+				// Flat loops instead of `forEach(fn.bind(...))`: that allocated a local closure
+				// plus two bound function objects per camera per frame. The math is identical.
+				// Nothing here is captured, so no closure is created at all.
+				emitChars(borderDrawData, borderColorTransform, drawItem, screenPos, originX, originY, scaleX, scaleY, clippedFrameRect,
+					charClipHelper, charClippedFrame);
+				emitChars(textDrawData, textColorTransform, drawItem, screenPos, originX, originY, scaleX, scaleY, clippedFrameRect,
+					charClipHelper, charClippedFrame);
+
 				#if FLX_DEBUG
 				FlxBasic.visibleCount++;
 				#end
@@ -450,6 +439,41 @@ class FlxBitmapText extends FlxSprite
 		}
 	}
 	
+	function emitChars(data:CharList, color:ColorTransform, drawItem:Dynamic, screenPos:FlxPoint, originX:Float, originY:Float, scaleX:Float,
+			scaleY:Float, clippedFrameRect:FlxRect, charClipHelper:FlxRect, charClippedFrame:FlxFrame):Void
+	{
+		final n = data.count();
+		for (i in 0...n)
+		{
+			emitChar(drawItem, data.charCodeAt(i), data.xAt(i), data.yAt(i), color, screenPos, originX, originY, scaleX, scaleY,
+				clippedFrameRect, charClipHelper, charClippedFrame);
+		}
+	}
+
+	function emitChar(drawItem:Dynamic, charCode:Int, x:Float, y:Float, color:ColorTransform, screenPos:FlxPoint, originX:Float, originY:Float,
+			scaleX:Float, scaleY:Float, clippedFrameRect:FlxRect, charClipHelper:FlxRect, charClippedFrame:FlxFrame):Void
+	{
+		var glyph = font.getCharFrame(charCode);
+		if (clipRect != null)
+		{
+			charClipHelper.copyFrom(clippedFrameRect).offset(-x, -y);
+			if (!glyph.isContained(charClipHelper))
+				glyph = glyph.clipTo(charClipHelper, charClippedFrame);
+		}
+
+		final matrix = matrixDrawHelper;
+		glyph.prepareMatrix(matrix);
+		matrix.translate(x - originX, y - originY);
+		matrix.scale(scaleX, scaleY);
+		if (angle != 0)
+		{
+			matrix.rotateWithTrig(_cosAngle, _sinAngle);
+		}
+
+		matrix.translate(screenPos.x + originX, screenPos.y + originY);
+		drawItem.addQuad(glyph, matrix, color);
+	}
+
 	override function set_clipRect(Rect:FlxRect):FlxRect
 	{
 		super.set_clipRect(Rect);
@@ -834,7 +858,6 @@ class FlxBitmapText extends FlxSprite
 			newline = newline + word;// `line += word` is broken in html5 on haxe 4.2.5
 			newLineWidth += (wordWidth < 0 ? getWordWidth(word) : wordWidth) + letterSpacing;
 		}
-		
 		
 		function startNewLine()
 		{
@@ -1781,6 +1804,29 @@ abstract CharList(Array<Float>) from Array<Float>
 	public inline function clear()
 	{
 		this.resize(0);
+	}
+
+	public inline function count():Int
+	{
+		return Std.int(this.length / 3);
+	}
+
+	/** Char code of entry `i`. */
+	public inline function charCodeAt(i:Int):Int
+	{
+		return Std.int(this[i * 3]);
+	}
+
+	/** x of entry `i`. */
+	public inline function xAt(i:Int):Float
+	{
+		return this[i * 3 + 1];
+	}
+
+	/** y of entry `i`. */
+	public inline function yAt(i:Int):Float
+	{
+		return this[i * 3 + 2];
 	}
 	
 	@:arrayAccess // TODO: deprecate

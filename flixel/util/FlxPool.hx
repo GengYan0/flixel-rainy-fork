@@ -93,14 +93,26 @@ class FlxPool<T:IFlxDestroyable> implements IFlxPool<T>
 
 	public function put(obj:T):Void
 	{
-		// we don't want to have the same object in the accessible pool twice (ok to have multiple in the inaccessible zone)
-		if (obj != null)
+		if (obj == null)
+			return;
+
+		// Only the accessible region `[0, _count)` can hold a live duplicate. Entries at or past
+		// `_count` are the "inaccessible zone" — the original code relied on re-adding those,
+		// which is exactly what we do when the scan misses.
+		//
+		// The old implementation called `_pool.indexOf(obj)`, which walked the *entire* backing
+		// array including the dead zone. Since the array is append-only, the dead zone grows to
+		// the historical peak, so once a frame briefly held 2000 points, every subsequent `put()`
+		// scanned 2000 slots. Bounding the scan by `_count` keeps the same semantics and makes
+		// the cost proportional to the live set instead of the high-water mark.
+		var i = _count;
+		while (i-- > 0)
 		{
-			var i:Int = _pool.indexOf(obj);
-			// if the object's spot in the pool was overwritten, or if it's at or past _count (in the inaccessible zone)
-			if (i == -1 || i >= _count)
-				putHelper(obj);
+			if (_pool[i] == obj)
+				return;
 		}
+
+		putHelper(obj);
 	}
 
 	public function putUnsafe(obj:T):Void

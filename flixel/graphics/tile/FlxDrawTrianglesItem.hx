@@ -106,11 +106,11 @@ class FlxDrawTrianglesItem extends FlxDrawBaseItem<FlxDrawTrianglesItem>
 
 		verticesPosition = 0;
 		indicesPosition = 0;
-		alphas.splice(0, alphas.length);
+		alphas.resize(0);
 		if (colorMultipliers != null)
-			colorMultipliers.splice(0, colorMultipliers.length);
+			colorMultipliers.resize(0);
 		if (colorOffsets != null)
-			colorOffsets.splice(0, colorOffsets.length);
+			colorOffsets.resize(0);
 	}
 
 	override public function dispose():Void
@@ -169,7 +169,9 @@ class FlxDrawTrianglesItem extends FlxDrawBaseItem<FlxDrawTrianglesItem>
 		var indicesLength:Int = indices.length;
 		if (!cameraBounds.overlaps(bounds))
 		{
-			this.vertices.splice(this.vertices.length - verticesLength, verticesLength);
+			// Roll back the vertices written above. This is a plain truncation — `splice` was
+			// building (and allocating) a result vector holding exactly the vertices discarded.
+			this.vertices.length = this.vertices.length - verticesLength;
 		}
 		else
 		{

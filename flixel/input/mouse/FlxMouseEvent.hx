@@ -240,6 +240,16 @@ class FlxMouseEvent<T:FlxObject> implements IFlxDestroyable
 	public var currentMouseButton:Null<FlxMouseButtonID>;
 
 	@:allow(flixel.input.mouse.FlxMouseEventManager)
+	var _overEpoch:Int = -1;
+
+	@:allow(flixel.input.mouse.FlxMouseEventManager)
+	var _wasOverPrev:Bool = false;
+
+	/** Frame stamp for `_clickList` membership (double-click detection). */
+	@:allow(flixel.input.mouse.FlxMouseEventManager)
+	var _clickEpoch:Int = -1;
+
+	@:allow(flixel.input.mouse.FlxMouseEventManager)
 	function new(object:T, onMouseDown:T->Void, onMouseUp:T->Void, onMouseOver:T->Void, onMouseOut:T->Void,
 		mouseChildren:Bool, mouseEnabled:Bool, pixelPerfect:Bool, mouseButtons:Null<Array<FlxMouseButtonID>>)
 	{

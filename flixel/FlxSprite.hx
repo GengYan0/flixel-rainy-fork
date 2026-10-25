@@ -1042,10 +1042,13 @@ class FlxSprite extends FlxObject
 				matrix.rotateWithTrig(_cosAngle, _sinAngle);
 		}
 		
-		final screenPos = getScreenPosition(camera).subtract(offset);
+		// Reuse the sprite's scratch point instead of taking one from the pool and returning it.
+		// `getScreenPosition(camera)` fell back to `FlxPoint.get()`, so every complex sprite paid
+		// a pool checkout and check-in every frame. `_point` is already the draw() scratch and the
+		// simple and complex paths are mutually exclusive per sprite.
+		final screenPos = getScreenPosition(_point, camera).subtract(offset);
 		screenPos.add(origin.x, origin.y);
 		matrix.translate(screenPos.x, screenPos.y);
-		screenPos.put();
 		
 		if (isPixelPerfectRender(camera))
 		{
