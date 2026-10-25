@@ -68,6 +68,10 @@ class FlxFrameStats
 		_updateAccum = 0;
 		_drawAccum = 0;
 		_renderAccum = 0;
+		// `FlxDrawBaseItem.render()` increments a static counter and nothing ever zeroed it,
+		// so every consumer (the debugger overlay, the F3 panel, `R3DUiBench`) was reading a
+		// number that had been growing since boot rather than a per-frame count.
+		flixel.graphics.tile.FlxDrawBaseItem.drawCalls = 0;
 	}
 
 	public static function beginUpdate():Void

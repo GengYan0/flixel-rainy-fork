@@ -76,8 +76,9 @@ class FlxPointer
 		
 		if (camera == null)
 		{
-			// 相机全部缺失（编辑器关闭/状态切换的过渡帧还会跑鼠标更新）：
-			// 退回原始屏幕坐标，不要崩（真机 ESC 退出摄像机编辑器 NPE，2026-10-25）
+			// No camera at all - mouse updates still run on the transitional frames of an
+			// editor close or state switch. Fall back to raw screen coordinates instead of
+			// throwing; quitting the camera editor with ESC used to NPE here.
 			if (result == null)
 				return FlxPoint.get(_rawX, _rawY);
 			return result.set(_rawX, _rawY);
@@ -121,7 +122,7 @@ class FlxPointer
 		
 		if (camera == null)
 		{
-			// 相机缺失（编辑器关闭/状态切换过渡帧）：退回游戏坐标，不要崩
+			// No camera (editor close / state switch transitional frame): fall back to game coordinates instead of throwing.
 			if (result == null)
 				return FlxPoint.get(gameX, gameY);
 			return result.set(gameX, gameY);
@@ -254,8 +255,9 @@ class FlxPointer
 		gameX = Std.int(_cachedPoint.x);
 		gameY = Std.int(_cachedPoint.y);
 		
-		// FlxG.camera 可能已被移除（编辑器关闭/状态切换过渡帧）：null 时跳过 view/world 更新、
-		// 保留上次值，避免 getWorldPosition→viewToWorldX 的 NPE（真机 ESC 退出摄像机编辑器崩溃）
+		// FlxG.camera may already be gone on the transitional frames of an editor close or
+		// state switch. Skip the view/world update and keep the last values, otherwise
+		// getWorldPosition -> viewToWorldX NPEs (quitting the camera editor with ESC).
 		if (FlxG.camera != null)
 		{
 			getViewPosition(FlxG.camera, _cachedPoint);

@@ -171,13 +171,11 @@ class FlxCamera extends FlxBasic
 	public var renderInterval:Int = 1;
 	var _renderTick:Int = 0;
 
-	/** 本帧是否该真正渲染此相机（lock 内先递增 tick，render 时读同一值） */
 	public inline function renderDue():Bool
 	{
 		return renderInterval <= 1 || (_renderTick % renderInterval) == 0;
 	}
 
-	/** lock 阶段调用：递增间隔 tick，返回本帧是否该 clear+fill+render 此相机 */
 	public function stepRenderDue():Bool
 	{
 		if (renderInterval > 1)
@@ -778,13 +776,13 @@ class FlxCamera extends FlxBasic
 				while (i >= 0 && walked < SORT_LOOKBACK)
 				{
 					var other:FlxDrawBaseItem<Dynamic> = sorted[i];
-					// TRIANGLE 是锚点：不越过锚点插入
+					// TRIANGLES are anchors: never insert across one
 					if (other.type != flixel.graphics.tile.FlxDrawBaseItem.FlxDrawItemType.TILES) break;
 					if (other.graphics == curr.graphics) break;
 					i--;
 					walked++;
 				}
-				// 只有真的找到了同类（i 有效且是同类 TILES）才前插；否则保持原位
+				// Only skip forward when a sibling TILES item was actually found.
 				if (i >= 0 && sorted[i].type == flixel.graphics.tile.FlxDrawBaseItem.FlxDrawItemType.TILES
 					&& sorted[i].graphics == curr.graphics)
 					sorted.insert(i + 1, curr);
@@ -813,7 +811,7 @@ class FlxCamera extends FlxBasic
 	public function drawPixels(?frame:FlxFrame, ?pixels:BitmapData, matrix:FlxMatrix, ?transform:ColorTransform, ?blend:BlendMode, ?smoothing:Bool = false,
 			?shader:FlxShader):Void
 	{
-		if (!renderDue()) return; // 相机渲染间隔：跳过帧不记录 draw item（canvas 保留上帧，CPU 侧矩阵/顶点也全免）
+		if (!renderDue()) return; // cadence skip: no draw item recorded, canvas keeps the previous frame, and all per-item matrix/vertex work is skipped too
 		if (FlxG.renderBlit)
 		{
 			_helperMatrix.copyFrom(matrix);
@@ -846,7 +844,7 @@ class FlxCamera extends FlxBasic
 	public function copyPixels(?frame:FlxFrame, ?pixels:BitmapData, ?sourceRect:Rectangle, destPoint:Point, ?transform:ColorTransform, ?blend:BlendMode,
 			?smoothing:Bool = false, ?shader:FlxShader):Void
 	{
-		if (!renderDue()) return; // 相机渲染间隔：跳过帧不记录 draw item（canvas 保留上帧，CPU 侧矩阵/顶点也全免）
+		if (!renderDue()) return; // cadence skip: no draw item recorded, canvas keeps the previous frame, and all per-item matrix/vertex work is skipped too
 		if (FlxG.renderBlit)
 		{
 			if (pixels != null)
@@ -891,7 +889,7 @@ class FlxCamera extends FlxBasic
 	public function drawTriangles(graphic:FlxGraphic, vertices:DrawData<Float>, indices:DrawData<Int>, uvtData:DrawData<Float>, ?colors:DrawData<Int>,
 			?position:FlxPoint, ?blend:BlendMode, repeat:Bool = false, smoothing:Bool = false, ?transform:ColorTransform, ?shader:FlxShader):Void
 	{
-		if (!renderDue()) return; // 相机渲染间隔：跳过帧不记录 draw item
+		if (!renderDue()) return; // cadence skip: no draw item recorded
 		final cameraBounds = _bounds.set(viewMarginLeft, viewMarginTop, viewWidth, viewHeight);
 		
 		if (FlxG.renderBlit)

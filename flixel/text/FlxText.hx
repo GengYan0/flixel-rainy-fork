@@ -984,9 +984,10 @@ class FlxText extends FlxSprite
 			if (prev != null)
 			{
 				FlxG.bitmap.detachByKey(stableKey);
-				// 只解绑不销毁：removeByKey 会 obj.destroy()，而旧图形可能仍在当前帧
-				// 的 draw stack 里，销毁后会触发 "Attempted to render an invalid FlxDrawItem"。
-				// 解绑后旧图形不再被缓存持有，由 GC 回收。
+				// Detach, do not destroy: removeByKey calls obj.destroy(), and the old graphic
+				// may still be referenced by this frame's draw stack - destroying it triggers
+				// "Attempted to render an invalid FlxDrawItem". Once detached nothing in the
+				// cache holds it, so the GC can reclaim it.
 			}
 			makeGraphic(newWidth, newHeight, FlxColor.TRANSPARENT, false, stableKey);
 			#else
