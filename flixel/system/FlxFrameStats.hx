@@ -60,6 +60,11 @@ class FlxFrameStats
 
 	public static function beginFrame():Void
 	{
+		// Outside the `enabled` guard on purpose: the counter is read by callers that do not
+		// care whether timing collection is on, and leaving it to accumulate turns a
+		// per-frame number into a since-boot one.
+		flixel.graphics.tile.FlxDrawBaseItem.drawCalls = 0;
+
 		if (!enabled)
 			return;
 		_frameT0 = nowMS();
@@ -68,10 +73,6 @@ class FlxFrameStats
 		_updateAccum = 0;
 		_drawAccum = 0;
 		_renderAccum = 0;
-		// `FlxDrawBaseItem.render()` increments a static counter and nothing ever zeroed it,
-		// so every consumer (the debugger overlay, the F3 panel, `R3DUiBench`) was reading a
-		// number that had been growing since boot rather than a per-frame count.
-		flixel.graphics.tile.FlxDrawBaseItem.drawCalls = 0;
 	}
 
 	public static function beginUpdate():Void
