@@ -1,10 +1,8 @@
-# Rainy fork of HaxeFlixel 6.2.0
+# rainy-flixel 技术说明
 
-Upstream: [HaxeFlixel/flixel](https://github.com/HaxeFlixel/flixel) 6.2.0, MIT.
-The base is imported as a single commit — the whole tree is present, upstream
-history is not.
+基线是 6.2.0 的完整树。
 
-## What differs from upstream
+## 与 6.2.0 的差异
 
 Perf work and instrumentation for the Rainy engine. Every commit says why; short
 version:
