@@ -324,6 +324,14 @@ class CameraFrontEnd
 					camera.render();
 				}
 			}
+
+			// One reset per frame, after every camera, because a composite pass anywhere in this
+			// loop invalidates the stage renderer's cached GL state for all of them.
+			if (FlxCamera.layerBlendUsed)
+			{
+				FlxCamera.layerBlendUsed = false;
+				FlxCamera.resetBlendStateCache();
+			}
 		}
 	}
 

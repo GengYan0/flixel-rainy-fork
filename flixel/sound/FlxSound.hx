@@ -224,6 +224,8 @@ class FlxSound extends FlxBasic
 	 * Internal tracker for whether to pan the sound left and right.  Default is false.
 	 */
 	var _proximityPan:Bool;
+
+	var _lastPan:Float = 0;
 	
 	/**
 	 * Helper var to prevent the sound from playing after focus was regained when it was already paused.
@@ -308,7 +310,7 @@ class FlxSound extends FlxBasic
 	 */
 	override public function update(elapsed:Float):Void
 	{
-		if (!playing)
+		if (!playing || _channel == null)
 			return;
 			
 		_time = _channel.position;
@@ -333,8 +335,12 @@ class FlxSound extends FlxBasic
 			
 			if (_proximityPan)
 			{
-				final xDiff = (x - _target.x) / _radius;
-				_transform.pan = FlxMath.bound(xDiff, -1, 1);
+				final pan = FlxMath.bound((x - _target.x) / _radius, -1, 1);
+				
+				// Writing the transform every frame re-uploads it to the mixer for no reason,
+				// and some backends restart the buffer when the pan changes mid-playback.
+				if (Math.abs(pan - _lastPan) > 0.001)
+					_transform.pan = _lastPan = pan;
 			}
 		}
 		
@@ -639,10 +645,14 @@ class FlxSound extends FlxBasic
 	 */
 	public function pause():FlxSound
 	{
-		if (!playing)
+		if (!playing || _channel == null)
 			return this;
 			
-		_time = _channel.position;
+		// Read the position before the channel goes away, but keep the last known value when
+		// the backend already dropped it, otherwise a paused sound resumes from zero.
+		final position = _channel.position;
+		if (position > 0)
+			_time = position;
 		_paused = true;
 		cleanup(false, false);
 		return this;

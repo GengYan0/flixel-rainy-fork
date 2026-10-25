@@ -5,6 +5,7 @@ import flixel.graphics.frames.FlxFrame;
 import flixel.graphics.tile.FlxDrawBaseItem;
 import flixel.graphics.tile.FlxDrawQuadsItem;
 import flixel.graphics.tile.FlxDrawTrianglesItem;
+import flixel.graphics.tile.FlxLayerBlendShader;
 import flixel.math.FlxMath;
 import flixel.math.FlxMatrix;
 import flixel.math.FlxPoint;
@@ -13,6 +14,7 @@ import flixel.system.FlxAssets.FlxShader;
 import flixel.util.FlxAxes;
 import flixel.util.FlxColor;
 import flixel.util.FlxDestroyUtil;
+import flixel.util.FlxLayerBlend;
 import flixel.util.FlxSpriteUtil;
 import openfl.Vector;
 import openfl.display.Bitmap;
@@ -21,6 +23,7 @@ import openfl.display.BlendMode;
 import openfl.display.DisplayObject;
 import openfl.display.Graphics;
 import openfl.display.Sprite;
+import openfl.display3D.Context3DTextureFilter;
 import openfl.filters.BitmapFilter;
 import openfl.geom.ColorTransform;
 import openfl.geom.Point;
@@ -552,6 +555,22 @@ class FlxCamera extends FlxBasic
 	 */
 	var _headOfDrawStack:FlxDrawBaseItem<Dynamic>;
 
+	var _layerBlendPresent:Bool = false;
+
+	var _layerBackBD:BitmapData;
+
+	var _layerFrontBD:BitmapData;
+
+	var _layerShader:FlxLayerBlendShader;
+
+	var _layerRects:Vector<Float> = new Vector<Float>();
+
+	var _layerTransforms:Vector<Float> = new Vector<Float>();
+
+	var _layerModeValue:Array<Int> = [0];
+
+	var _layerShaderChecked:Bool = false;
+
 	/**
 	 * Last draw tiles item
 	 */
@@ -597,6 +616,9 @@ class FlxCamera extends FlxBasic
 		return startTrianglesBatch(graphic, smooth, colored, blend);
 		#else
 		var itemToReturn = null;
+
+		if (FlxLayerBlend.needsLayer(blend))
+			_layerBlendPresent = true;
 
 		if (_currentDrawItem != null
 			&& _currentDrawItem.type == FlxDrawItemType.TILES
@@ -655,6 +677,9 @@ class FlxCamera extends FlxBasic
 	@:noCompletion
 	public function startTrianglesBatch(graphic:FlxGraphic, smoothing:Bool = false, isColored:Bool = false, ?blend:BlendMode, ?hasColorOffsets:Bool, ?shader:FlxShader):FlxDrawTrianglesItem
 	{
+		if (FlxLayerBlend.needsLayer(blend))
+			_layerBlendPresent = true;
+
 		if (_currentDrawItem != null
 			&& _currentDrawItem.type == FlxDrawItemType.TRIANGLES
 			&& _headTriangles.graphics == graphic
@@ -744,9 +769,21 @@ class FlxCamera extends FlxBasic
 		_headOfDrawStack = null;
 		_headTiles = null;
 		_headTriangles = null;
+		_layerBlendPresent = false;
 	}
 
 	public static var sortDrawItems:Bool = false;
+
+	public static var layerBlendEnabled:Bool = true;
+
+	public static var layerBlendUsed:Bool = false;
+
+	public static function resetBlendStateCache():Void
+	{
+		#if !flash
+		openfl.display.OpenGLRenderer.resetStageStateCache();
+		#end
+	}
 
 	@:allow(flixel.system.frontEnds.CameraFrontEnd)
 	function render():Void
@@ -768,11 +805,128 @@ class FlxCamera extends FlxBasic
 		}
 
 		var currItem:FlxDrawBaseItem<Dynamic> = _headOfDrawStack;
+
+		if (_layerBlendPresent && layerBlendEnabled)
+		{
+			renderLayerBlend();
+			return;
+		}
+
 		while (currItem != null)
 		{
 			currItem.render(this);
 			currItem = currItem.next;
 		}
+	}
+
+	function renderLayerBlend():Void
+	{
+		layerBlendUsed = true;
+		ensureLayerBuffers();
+
+		var curr:FlxDrawBaseItem<Dynamic> = _headOfDrawStack;
+		while (curr != null)
+		{
+			var mode:Int = FlxLayerBlend.modeId(curr.blend);
+
+			if (mode == FlxLayerBlend.NONE)
+			{
+				curr.render(this);
+				curr = curr.next;
+				continue;
+			}
+
+			// Everything above this point (background fill, camera FX, plain batches) becomes
+			// the backdrop. `BitmapData.draw` cancels out the canvas' own transform, so the
+			// snapshot is 1:1 in canvas-local pixels and lines up with the quad drawn below.
+			_layerBackBD.draw(canvas);
+			canvas.graphics.clear();
+
+			// Consecutive batches with the same mode share one composite pass. Their blend is
+			// dropped while they render: they are now the first thing on an empty canvas, and
+			// ordinary source-over is exactly what stacking them needs.
+			while (curr != null && FlxLayerBlend.modeId(curr.blend) == mode)
+			{
+				var savedBlend:BlendMode = curr.blend;
+				curr.blend = null;
+				curr.render(this);
+				curr.blend = savedBlend;
+				curr = curr.next;
+			}
+
+			_layerFrontBD.draw(canvas);
+			canvas.graphics.clear();
+
+			drawLayerComposite(mode);
+		}
+	}
+
+	function drawLayerComposite(mode:Int):Void
+	{
+		var shader:FlxLayerBlendShader = _layerShader;
+
+		// The backdrop is bound as `bitmap`, not as a private uniform: the quad path uses the bound
+		// bitmap's size to turn rects into UVs and skips the DRAW_QUADS command when none is bound.
+		shader.bitmap.input = _layerBackBD;
+		shader.bitmap.filter = Context3DTextureFilter.NEAREST;
+
+		shader.uFront.input = _layerFrontBD;
+		shader.uFront.filter = Context3DTextureFilter.NEAREST;
+
+		_layerModeValue[0] = mode;
+		shader.uMode.value = _layerModeValue;
+
+		var g:Graphics = canvas.graphics;
+		g.overrideBlendMode(null);
+		g.beginShaderFill(shader);
+		g.drawQuads(_layerRects, null, _layerTransforms);
+		g.endFill();
+
+		// openfl reports a failed shader compile through `Log.error` only, so without this check
+		// the batch would just vanish with no trace of why.
+		if (!_layerShaderChecked)
+		{
+			_layerShaderChecked = true;
+			if (shader.program == null)
+				FlxG.log.warn('FlxLayerBlendShader failed to compile; layer blend modes will draw nothing.');
+		}
+	}
+
+	function ensureLayerBuffers():Void
+	{
+		var w:Int = Std.int(width);
+		var h:Int = Std.int(height);
+		if (w < 1) w = 1;
+		if (h < 1) h = 1;
+
+		if (_layerBackBD != null && _layerBackBD.width == w && _layerBackBD.height == h)
+			return;
+
+		if (_layerBackBD != null)
+		{
+			_layerBackBD.dispose();
+			_layerFrontBD.dispose();
+		}
+
+		_layerBackBD = new BitmapData(w, h, true, 0);
+		_layerFrontBD = new BitmapData(w, h, true, 0);
+
+		_layerRects.length = 0;
+		_layerRects.push(0);
+		_layerRects.push(0);
+		_layerRects.push(w);
+		_layerRects.push(h);
+
+		_layerTransforms.length = 0;
+		_layerTransforms.push(1);
+		_layerTransforms.push(0);
+		_layerTransforms.push(0);
+		_layerTransforms.push(1);
+		_layerTransforms.push(0);
+		_layerTransforms.push(0);
+
+		if (_layerShader == null)
+			_layerShader = new FlxLayerBlendShader();
 	}
 
 	static inline var SORT_LOOKBACK:Int = 8;
@@ -1173,6 +1327,23 @@ class FlxCamera extends FlxBasic
 			_blitMatrix = null;
 			_helperMatrix = null;
 			_helperPoint = null;
+
+			if (_layerBackBD != null)
+			{
+				_layerBackBD.dispose();
+				_layerFrontBD.dispose();
+				_layerBackBD = null;
+				_layerFrontBD = null;
+			}
+
+			if (_layerShader != null)
+			{
+				_layerShader = null;
+			}
+
+			_layerRects = null;
+			_layerTransforms = null;
+			_layerModeValue = null;
 		}
 
 		_bounds = FlxDestroyUtil.put(_bounds);

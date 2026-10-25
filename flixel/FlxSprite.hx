@@ -257,6 +257,14 @@ class FlxSprite extends FlxObject
 	 * Blending modes, just like Photoshop or whatever, e.g. "multiply", "screen", etc.
 	 */
 	public var blend(default, set):BlendMode;
+
+	public var zoomFactor:Float = 1;
+
+	public var zoomFactorEnabled:Bool = true;
+
+	public var angleFactor:Float = 1;
+
+	public var angleFactorEnabled:Bool = true;
 	
 	/**
 	 * Multiplies this sprite's image by the given red, green and blue components, alpha is ignored.
@@ -966,7 +974,9 @@ class FlxSprite extends FlxObject
 			if (!camera.visible || !camera.exists || !isOnScreen(camera))
 				continue;
 			
-			if (isSimpleRender(camera))
+			// A camera-relative correction needs the full matrix, so the cheap blit path
+			// is skipped only while a factor is actually doing something.
+			if (isSimpleRender(camera) && !hasViewFactors())
 				drawSimple(camera);
 			else
 				drawComplex(camera);
@@ -1050,10 +1060,44 @@ class FlxSprite extends FlxObject
 		screenPos.add(origin.x, origin.y);
 		matrix.translate(screenPos.x, screenPos.y);
 		
-		if (isPixelPerfectRender(camera))
+		final factored = hasViewFactors();
+		if (factored)
+			applyViewFactors(matrix, camera);
+		
+		if (!factored && isPixelPerfectRender(camera))
 		{
 			matrix.tx = Math.round(matrix.tx);
 			matrix.ty = Math.round(matrix.ty);
+		}
+	}
+	
+	public inline function hasViewFactors():Bool
+	{
+		return (zoomFactorEnabled && zoomFactor != 1) || (angleFactorEnabled && angleFactor != 1);
+	}
+	
+	public function applyViewFactors(matrix:FlxMatrix, camera:FlxCamera):Void
+	{
+		if (zoomFactorEnabled && zoomFactor != 1 && camera.scaleX != 0 && camera.scaleY != 0)
+		{
+			final cx = camera.width * 0.5;
+			final cy = camera.height * 0.5;
+			
+			// A factor of 1 leaves the matrix alone, 0 divides the zoom back out.
+			final sx = (camera.scaleX > 0 ? Math.max : Math.min)(0, (1 - zoomFactor) / camera.scaleX + zoomFactor);
+			final sy = (camera.scaleY > 0 ? Math.max : Math.min)(0, (1 - zoomFactor) / camera.scaleY + zoomFactor);
+			
+			matrix.setTo(matrix.a * sx, matrix.b * sy, matrix.c * sx, matrix.d * sy, (matrix.tx - cx) * sx + cx, (matrix.ty - cy) * sy + cy);
+		}
+		
+		if (angleFactorEnabled && angleFactor != 1 && camera.angle != 0)
+		{
+			final cx = camera.width * 0.5;
+			final cy = camera.height * 0.5;
+			
+			matrix.translate(-cx, -cy);
+			matrix.rotate(-camera.angle * FlxAngle.TO_RAD * (1 - angleFactor));
+			matrix.translate(cx, cy);
 		}
 	}
 
@@ -1747,7 +1791,21 @@ class FlxSprite extends FlxObject
 		if (isPixelPerfectRender(camera))
 			newRect.round();
 		newRect.setSize(frameWidth * Math.abs(scale.x), frameHeight * Math.abs(scale.y));
-		return newRect.getRotatedBounds(angle, _scaledOrigin, newRect);
+		newRect = newRect.getRotatedBounds(angle, _scaledOrigin, newRect);
+		
+		// Keep culling in sync with the zoom correction in `applyViewFactors`, otherwise a
+		// zoom-independent sprite pops out of view while the camera is still showing it.
+		if (zoomFactorEnabled && zoomFactor != 1 && camera.scaleX != 0 && camera.scaleY != 0)
+		{
+			final cx = camera.width * 0.5;
+			final cy = camera.height * 0.5;
+			final sx = (camera.scaleX > 0 ? Math.max : Math.min)(0, (1 - zoomFactor) / camera.scaleX + zoomFactor);
+			final sy = (camera.scaleY > 0 ? Math.max : Math.min)(0, (1 - zoomFactor) / camera.scaleY + zoomFactor);
+			
+			newRect.set((newRect.x - cx) * sx + cx, (newRect.y - cy) * sy + cy, newRect.width * sx, newRect.height * sy);
+		}
+		
+		return newRect;
 	}
 	
 	/**

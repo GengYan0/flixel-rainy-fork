@@ -25,6 +25,11 @@ class FlxGraphic implements IFlxDestroyable
 	public static var defaultPersist:Bool = false;
 
 	/**
+	 * @see [FlxGraphic.destroyOnNoUse](https://api.haxeflixel.com/flixel/graphics/FlxGraphic.html#destroyOnNoUse)
+	 */
+	public static var defaultDestroyOnNoUse:Bool = true;
+
+	/**
 	 * Creates and caches FlxGraphic object from openfl.Assets key string.
 	 *
 	 * @param   Source   `openfl.Assets` key string. For example: `"assets/image.png"`.
@@ -297,11 +302,7 @@ class FlxGraphic implements IFlxDestroyable
 	 */
 	public var persist:Bool = false;
 
-	/**
-	 * Whether this `FlxGraphic` should be destroyed when `useCount` becomes zero (defaults to `true`).
-	 * Has no effect when `persist` is `true`.
-	 */
-	public var destroyOnNoUse(default, set):Bool = true;
+	public var destroyOnNoUse(default, set):Bool = defaultDestroyOnNoUse;
 
 	/**
 	 * Whether the `BitmapData` of this graphic object has been loaded or not.
