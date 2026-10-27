@@ -202,6 +202,17 @@ class FlxFrameStats
 		return percentile(_periodSamples, _sampleCount, p);
 	}
 
+	public static function copyPeriodSamples():Array<Float>
+	{
+		var out:Array<Float> = [];
+		for (i in 0..._sampleCount)
+		{
+			var v:Float = _periodSamples[i];
+			if (v > 0) out.push(v);
+		}
+		return out;
+	}
+
 	public static function maxTotal():Float
 	{
 		var max = 0.0;
