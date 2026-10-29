@@ -510,8 +510,6 @@ class FlxText extends FlxSprite
 	{
 		_formatRanges = [];
 
-		// Dropping ranges changes the output even when `_defaultFormat` is untouched, so this
-		// cannot rely on updateDefaultFormat()'s no-op guard to set _regen.
 		_regen = true;
 		updateDefaultFormat();
 
@@ -523,8 +521,6 @@ class FlxText extends FlxSprite
 		if (textField == null)
 			return this;
 
-		// Forget the snapshot so updateDefaultFormat() cannot short-circuit, and re-apply the
-		// string unconditionally (bypassing set_text()'s equality guard on purpose).
 		_appliedFormat = null;
 		textField.text = text;
 		updateDefaultFormat();
@@ -686,9 +682,6 @@ class FlxText extends FlxSprite
 			return this.text = value;
 		}
 
-		// Assigning `textField.text` rebuilds the field's text layout even when the string is
-		// unchanged. `_regen` was already guarded, but the assignment itself was not, so a label
-		// reasserting its own text every frame (immediate-mode UI) still paid a full re-layout.
 		if (this.text == value)
 			return value;
 
@@ -876,8 +869,6 @@ class FlxText extends FlxSprite
 	{
 		final openflAlign = FlxTextAlign.toOpenFL(Alignment);
 
-		// Every other format setter already skipped when unchanged; this one did not, which
-		// made `text.alignment = text.alignment` a full re-rasterization per frame.
 		if (_defaultFormat.align == openflAlign)
 			return Alignment;
 
@@ -959,9 +950,6 @@ class FlxText extends FlxSprite
 		_regen = false;
 
 		#if rainy_fork_flixel
-		// Any edit has to paint into a canvas this text owns. If the pager redirected the
-		// last version to a shared page, step off it first — filling a page with
-		// transparent pixels would erase every other label sharing it.
 		detachPager();
 
 		if (textPager != null)
@@ -972,8 +960,6 @@ class FlxText extends FlxSprite
 				final hit:FlxTextPagerSlot = textPager.find(pageKey);
 				if (hit != null)
 				{
-					// No canvas is allocated on this path, so record that fact: oldWidth 0
-					// forces the next edit through the "make a new buffer" branch.
 					_canvas = null;
 					_pagerSlot = hit;
 					frames = hit.frames;
@@ -1024,8 +1010,6 @@ class FlxText extends FlxSprite
 		
 		// prevent text height from shrinking on flash if text == ""
 		#if rainy_fork_flixel
-		// `canvas == null` means the pager drew the last version and no buffer was ever
-		// made for this text, so a buffer is mandatory here even for an empty string.
 		if (canvas == null || (textField.textHeight != 0 && (oldWidth != newWidth || oldHeight != newHeight)))
 		#else
 		if (textField.textHeight != 0 && (oldWidth != newWidth || oldHeight != newHeight))
@@ -1038,13 +1022,7 @@ class FlxText extends FlxSprite
 			if (prev != null)
 			{
 				FlxG.bitmap.detachByKey(stableKey);
-				// Detach, do not destroy: removeByKey calls obj.destroy(), and the old graphic
-				// may still be referenced by this frame's draw stack - destroying it triggers
-				// "Attempted to render an invalid FlxDrawItem". Once detached nothing in the
-				// cache holds it, so the GC can reclaim it.
 			}
-			// An empty string reports a zero-width field; a zero-sized BitmapData is an
-			// error on some backends, and nothing is drawn into it either way.
 			makeGraphic(newWidth < 1 ? 1 : newWidth, newHeight < 1 ? 1 : newHeight, FlxColor.TRANSPARENT, false, stableKey);
 			#else
 			final key:String = FlxG.bitmap.getUniqueKey("text");
@@ -1099,9 +1077,6 @@ class FlxText extends FlxSprite
 		}
 		
 		#if rainy_fork_flixel
-		// Offer the finished pixels to the shared pages. This never changes how `this`
-		// looks: the text keeps drawing from its own canvas, and the copy is only there
-		// for the next label asking for the same string.
 		storeInPager();
 		#end
 
@@ -1117,9 +1092,6 @@ class FlxText extends FlxSprite
 
 		_pagerSlot = null;
 
-		// Without a canvas of our own there is nothing to step back to; leaving `frames`
-		// on the page is safe because the next edit is forced through the "make a new
-		// buffer" branch, which replaces `frames` outright.
 		if (_canvas != null)
 			frames = _canvas.imageFrame;
 	}
@@ -1129,21 +1101,15 @@ class FlxText extends FlxSprite
 		if (text == null || text.length == 0)
 			return null;
 
-		// Borders draw outside the layout box, and this fork has no way to describe the
-		// result in a key. Cheap to exclude: bordered labels are a minority.
 		if (borderStyle != NONE)
 			return null;
 
 		if (_formatRanges != null && _formatRanges.length > 0)
 			return null;
 
-		// Multi-line labels are paragraphs, not labels; caching them would fill a page with
-		// one string. Single lines are what a menu asks for over and over.
 		if (text.indexOf("\n") >= 0)
 			return null;
 
-		// `fieldWidth` is in the key rather than filtered out: a fixed-width label wraps at
-		// that width, so two labels only share pixels when they also share the width.
 		return font + "|" + size + "|" + color + "|" + (bold ? 1 : 0) + "|" + (italic ? 1 : 0)
 			+ "|" + (underline ? 1 : 0) + "|" + letterSpacing + "|" + alignment + "|" + (antialiasing ? 1 : 0)
 			+ "|" + (_autoHeight ? 1 : 0) + "|" + fieldWidth + "|" + text;
@@ -1476,9 +1442,6 @@ class FlxText extends FlxSprite
 			&& a.letterSpacing == b.letterSpacing
 			&& a.url == b.url
 			&& a.target == b.target
-			// Layout-affecting fields. They have no FlxText setter, so the only way to reach
-			// them is through `defaultTextFormat`; leaving them out of this comparison made
-			// such a change a silent no-op because the snapshot looked identical.
 			&& a.leading == b.leading
 			&& a.indent == b.indent
 			&& a.blockIndent == b.blockIndent

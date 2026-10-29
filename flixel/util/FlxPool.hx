@@ -96,15 +96,7 @@ class FlxPool<T:IFlxDestroyable> implements IFlxPool<T>
 		if (obj == null)
 			return;
 
-		// Only the accessible region `[0, _count)` can hold a live duplicate. Entries at or past
-		// `_count` are the "inaccessible zone" — the original code relied on re-adding those,
-		// which is exactly what we do when the scan misses.
 		//
-		// The old implementation called `_pool.indexOf(obj)`, which walked the *entire* backing
-		// array including the dead zone. Since the array is append-only, the dead zone grows to
-		// the historical peak, so once a frame briefly held 2000 points, every subsequent `put()`
-		// scanned 2000 slots. Bounding the scan by `_count` keeps the same semantics and makes
-		// the cost proportional to the live set instead of the high-water mark.
 		var i = _count;
 		while (i-- > 0)
 		{

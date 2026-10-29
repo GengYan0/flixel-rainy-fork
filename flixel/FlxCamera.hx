@@ -173,21 +173,28 @@ class FlxCamera extends FlxBasic
 
 	public var renderInterval:Int = 1;
 	var _renderTick:Int = 0;
+	var _renderDue:Bool = true;
 
 	public inline function renderDue():Bool
 	{
-		return renderInterval <= 1 || (_renderTick % renderInterval) == 0;
+		return _renderDue;
 	}
 
 	public function stepRenderDue():Bool
 	{
-		// Decide before advancing. Advancing first meant `renderInterval = 2` skipped the
-		// very first frame (tick 0 became 1, and 1 is not a multiple of 2), so a freshly
-		// created throttled camera showed an empty canvas until the second frame.
-		final due = renderDue();
-		if (renderInterval > 1)
-			_renderTick++;
-		return due;
+		if (renderInterval <= 1)
+		{
+			_renderTick = 0;
+			_renderDue = true;
+			return true;
+		}
+
+		_renderDue = (_renderTick == 0);
+
+		if (++_renderTick >= renderInterval)
+			_renderTick = 0;
+
+		return _renderDue;
 	}
 
 	/**
@@ -567,6 +574,8 @@ class FlxCamera extends FlxBasic
 
 	var _layerTransforms:Vector<Float> = new Vector<Float>();
 
+	var _layerRect:Rectangle;
+
 	var _layerModeValue:Array<Int> = [0];
 
 	var _layerShaderChecked:Bool = false;
@@ -794,10 +803,6 @@ class FlxCamera extends FlxBasic
 		{
 			_headOfDrawStack = stableSortDrawStack(_headOfDrawStack);
 
-			// Reordering moves the tail. `_currentDrawItem` is the append cursor used by
-			// `startQuadBatch`/`startTrianglesBatch`, and it still points at the pre-sort
-			// tail — an item drawn after `render()` would then splice itself into the
-			// middle of the rebuilt chain and orphan everything behind it.
 			var tail:FlxDrawBaseItem<Dynamic> = _headOfDrawStack;
 			while (tail.next != null)
 				tail = tail.next;
@@ -836,15 +841,10 @@ class FlxCamera extends FlxBasic
 				continue;
 			}
 
-			// Everything above this point (background fill, camera FX, plain batches) becomes
-			// the backdrop. `BitmapData.draw` cancels out the canvas' own transform, so the
-			// snapshot is 1:1 in canvas-local pixels and lines up with the quad drawn below.
+			_layerBackBD.fillRect(_layerRect, 0);
 			_layerBackBD.draw(canvas);
 			canvas.graphics.clear();
 
-			// Consecutive batches with the same mode share one composite pass. Their blend is
-			// dropped while they render: they are now the first thing on an empty canvas, and
-			// ordinary source-over is exactly what stacking them needs.
 			while (curr != null && FlxLayerBlend.modeId(curr.blend) == mode)
 			{
 				var savedBlend:BlendMode = curr.blend;
@@ -854,6 +854,7 @@ class FlxCamera extends FlxBasic
 				curr = curr.next;
 			}
 
+			_layerFrontBD.fillRect(_layerRect, 0);
 			_layerFrontBD.draw(canvas);
 			canvas.graphics.clear();
 
@@ -865,8 +866,6 @@ class FlxCamera extends FlxBasic
 	{
 		var shader:FlxLayerBlendShader = _layerShader;
 
-		// The backdrop is bound as `bitmap`, not as a private uniform: the quad path uses the bound
-		// bitmap's size to turn rects into UVs and skips the DRAW_QUADS command when none is bound.
 		shader.bitmap.input = _layerBackBD;
 		shader.bitmap.filter = Context3DTextureFilter.NEAREST;
 
@@ -882,8 +881,6 @@ class FlxCamera extends FlxBasic
 		g.drawQuads(_layerRects, null, _layerTransforms);
 		g.endFill();
 
-		// openfl reports a failed shader compile through `Log.error` only, so without this check
-		// the batch would just vanish with no trace of why.
 		if (!_layerShaderChecked)
 		{
 			_layerShaderChecked = true;
@@ -910,6 +907,8 @@ class FlxCamera extends FlxBasic
 
 		_layerBackBD = new BitmapData(w, h, true, 0);
 		_layerFrontBD = new BitmapData(w, h, true, 0);
+
+		_layerRect = new Rectangle(0, 0, w, h);
 
 		_layerRects.length = 0;
 		_layerRects.push(0);
@@ -945,13 +944,11 @@ class FlxCamera extends FlxBasic
 				while (i >= 0 && walked < SORT_LOOKBACK)
 				{
 					var other:FlxDrawBaseItem<Dynamic> = sorted[i];
-					// TRIANGLES are anchors: never insert across one
 					if (other.type != flixel.graphics.tile.FlxDrawBaseItem.FlxDrawItemType.TILES) break;
 					if (other.graphics == curr.graphics) break;
 					i--;
 					walked++;
 				}
-				// Only skip forward when a sibling TILES item was actually found.
 				if (i >= 0 && sorted[i].type == flixel.graphics.tile.FlxDrawBaseItem.FlxDrawItemType.TILES
 					&& sorted[i].graphics == curr.graphics)
 					sorted.insert(i + 1, curr);
@@ -1343,6 +1340,7 @@ class FlxCamera extends FlxBasic
 
 			_layerRects = null;
 			_layerTransforms = null;
+			_layerRect = null;
 			_layerModeValue = null;
 		}
 
@@ -1914,9 +1912,6 @@ class FlxCamera extends FlxBasic
 		}
 		else
 		{
-			// A fully transparent fill over an already-cleared canvas cannot change a pixel,
-			// but it still costs a GraphicsSolidFill, a path, and a full-viewport retessellation
-			// every frame. Overlay cameras that keep `bgColor` at alpha 0 hit this on every frame.
 			if (FxAlpha <= 0)
 				return;
 

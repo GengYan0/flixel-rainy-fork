@@ -16,11 +16,6 @@ class FlxFrameStats
 	public static var drawCalls:Int = 0;
 	public static var frameCount:Int = 0;
 
-	// Float milliseconds with true sub-ms precision. Lib.getTimer() is whole ms, and on
-	// this toolchain haxe.Timer.stamp() also quantises to 1 ms — both make p50/p99 useless
-	// at high refresh. Use QueryPerformanceCounter on Windows, stamp() elsewhere.
-	// std::chrono::high_resolution_clock maps to QPC on MSVC, without dragging in
-	// <windows.h> (whose macros collide with OpenFL headers).
 	#if cpp
 	@:functionCode('
 		static const auto _rainy_t0 = std::chrono::high_resolution_clock::now();
@@ -60,9 +55,6 @@ class FlxFrameStats
 
 	public static function beginFrame():Void
 	{
-		// Outside the `enabled` guard on purpose: the counter is read by callers that do not
-		// care whether timing collection is on, and leaving it to accumulate turns a
-		// per-frame number into a since-boot one.
 		flixel.graphics.tile.FlxDrawBaseItem.drawCalls = 0;
 
 		if (!enabled)
@@ -149,8 +141,6 @@ class FlxFrameStats
 		renderMS = 0;
 		totalMS = 0;
 		periodMS = 0;
-		// Without this the first period after a reset spans from the last measured frame to
-		// now — minutes if timing was disabled in between — and p99 reports that as a hitch.
 		_prevFrameT0 = -1;
 	}
 
@@ -159,7 +149,7 @@ class FlxFrameStats
 		return percentile(_updateSamples, _sampleCount, p);
 	}
 
-	/** Highest draw-phase sample in the current window. */
+	
 	public static function maxDraw():Float
 	{
 		var max = 0.0;

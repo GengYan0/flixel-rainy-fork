@@ -169,8 +169,6 @@ class FlxDrawTrianglesItem extends FlxDrawBaseItem<FlxDrawTrianglesItem>
 		var indicesLength:Int = indices.length;
 		if (!cameraBounds.overlaps(bounds))
 		{
-			// Roll back the vertices written above. This is a plain truncation — `splice` was
-			// building (and allocating) a result vector holding exactly the vertices discarded.
 			this.vertices.length = this.vertices.length - verticesLength;
 		}
 		else

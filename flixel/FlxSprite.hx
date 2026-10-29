@@ -978,9 +978,6 @@ class FlxSprite extends FlxObject
 			if (!camera.visible || !camera.exists || !isOnScreen(camera))
 				continue;
 			
-			// A camera-relative correction needs the full matrix, so the cheap blit path
-			// is skipped only while a factor is actually doing something. Shear is in the
-			// same boat: there is no way to blit a sheared quad.
 			if (isSimpleRender(camera) && !hasViewFactors() && !hasSkew())
 				drawSimple(camera);
 			else
@@ -1048,13 +1045,6 @@ class FlxSprite extends FlxObject
 		frame.prepareMatrix(matrix, FlxFrameAngle.ANGLE_0, checkFlipX(), checkFlipY());
 		matrix.translate(-origin.x, -origin.y);
 		
-		// Shear goes here, between the origin shift and the scale, and the position matters.
-		// `Matrix` in openfl is row-vector with right multiplication, so each call appends
-		// an inner transform: whatever is applied last acts on the texture coordinates
-		// first. Inserting after `scale` would put the shear outside the scaling - the lean
-		// would then be measured in screen pixels and a scaled sprite would shear by a
-		// different visual angle - and inserting after `rotateWithTrig` would measure it in
-		// screen axes, so a rotated arrow would shear sideways instead of along its edges.
 		if (hasSkew())
 			applySkew(matrix);
 		
@@ -1068,10 +1058,6 @@ class FlxSprite extends FlxObject
 				matrix.rotateWithTrig(_cosAngle, _sinAngle);
 		}
 		
-		// Reuse the sprite's scratch point instead of taking one from the pool and returning it.
-		// `getScreenPosition(camera)` fell back to `FlxPoint.get()`, so every complex sprite paid
-		// a pool checkout and check-in every frame. `_point` is already the draw() scratch and the
-		// simple and complex paths are mutually exclusive per sprite.
 		final screenPos = getScreenPosition(_point, camera).subtract(offset);
 		screenPos.add(origin.x, origin.y);
 		matrix.translate(screenPos.x, screenPos.y);
@@ -1128,7 +1114,6 @@ class FlxSprite extends FlxObject
 			final cx = camera.width * 0.5;
 			final cy = camera.height * 0.5;
 			
-			// A factor of 1 leaves the matrix alone, 0 divides the zoom back out.
 			final sx = (camera.scaleX > 0 ? Math.max : Math.min)(0, (1 - zoomFactor) / camera.scaleX + zoomFactor);
 			final sy = (camera.scaleY > 0 ? Math.max : Math.min)(0, (1 - zoomFactor) / camera.scaleY + zoomFactor);
 			
@@ -1838,8 +1823,6 @@ class FlxSprite extends FlxObject
 		newRect.setSize(frameWidth * Math.abs(scale.x), frameHeight * Math.abs(scale.y));
 		newRect = newRect.getRotatedBounds(angle, _scaledOrigin, newRect);
 		
-		// Keep culling in sync with the zoom correction in `applyViewFactors`, otherwise a
-		// zoom-independent sprite pops out of view while the camera is still showing it.
 		if (zoomFactorEnabled && zoomFactor != 1 && camera.scaleX != 0 && camera.scaleY != 0)
 		{
 			final cx = camera.width * 0.5;

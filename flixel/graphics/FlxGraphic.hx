@@ -24,9 +24,7 @@ class FlxGraphic implements IFlxDestroyable
 	 */
 	public static var defaultPersist:Bool = false;
 
-	/**
-	 * @see [FlxGraphic.destroyOnNoUse](https://api.haxeflixel.com/flixel/graphics/FlxGraphic.html#destroyOnNoUse)
-	 */
+	
 	public static var defaultDestroyOnNoUse:Bool = true;
 
 	/**

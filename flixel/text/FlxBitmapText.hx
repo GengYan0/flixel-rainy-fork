@@ -362,8 +362,6 @@ class FlxBitmapText extends FlxSprite
 
 			if (clippedFrameRect.isEmpty)
 			{
-				// Was a bare `return`, leaking the pooled rect on every draw while the text
-				// is fully clipped (scrolled out of a list, for instance).
 				clippedFrameRect.put();
 				return;
 			}
@@ -412,9 +410,6 @@ class FlxBitmapText extends FlxSprite
 				final hasColorOffsets = (colorTransform != null && colorTransform.hasRGBAOffsets());
 				final drawItem = camera.startQuadBatch(font.parent, true, hasColorOffsets, blend, antialiasing, shader);
 
-				// Flat loops instead of `forEach(fn.bind(...))`: that allocated a local closure
-				// plus two bound function objects per camera per frame. The math is identical.
-				// Nothing here is captured, so no closure is created at all.
 				emitChars(borderDrawData, borderColorTransform, drawItem, screenPos, originX, originY, scaleX, scaleY, clippedFrameRect,
 					charClipHelper, charClippedFrame);
 				emitChars(textDrawData, textColorTransform, drawItem, screenPos, originX, originY, scaleX, scaleY, clippedFrameRect,
@@ -1811,19 +1806,19 @@ abstract CharList(Array<Float>) from Array<Float>
 		return Std.int(this.length / 3);
 	}
 
-	/** Char code of entry `i`. */
+	
 	public inline function charCodeAt(i:Int):Int
 	{
 		return Std.int(this[i * 3]);
 	}
 
-	/** x of entry `i`. */
+	
 	public inline function xAt(i:Int):Float
 	{
 		return this[i * 3 + 1];
 	}
 
-	/** y of entry `i`. */
+	
 	public inline function yAt(i:Int):Float
 	{
 		return this[i * 3 + 2];

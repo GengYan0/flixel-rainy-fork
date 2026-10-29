@@ -337,8 +337,6 @@ class FlxSound extends FlxBasic
 			{
 				final pan = FlxMath.bound((x - _target.x) / _radius, -1, 1);
 				
-				// Writing the transform every frame re-uploads it to the mixer for no reason,
-				// and some backends restart the buffer when the pan changes mid-playback.
 				if (Math.abs(pan - _lastPan) > 0.001)
 					_transform.pan = _lastPan = pan;
 			}
@@ -648,8 +646,6 @@ class FlxSound extends FlxBasic
 		if (!playing || _channel == null)
 			return this;
 			
-		// Read the position before the channel goes away, but keep the last known value when
-		// the backend already dropped it, otherwise a paused sound resumes from zero.
 		final position = _channel.position;
 		if (position > 0)
 			_time = position;

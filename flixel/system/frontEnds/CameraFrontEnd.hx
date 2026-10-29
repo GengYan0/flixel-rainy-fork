@@ -284,12 +284,9 @@ class CameraFrontEnd
 			{
 				camera.clearDrawStack();
 
-				// Render interval: on a skipped frame the canvas keeps the last executed
-				// frame and nothing is filled, so the GPU cost drops by the interval factor.
 				if (camera.stepRenderDue())
 				{
 					camera.canvas.graphics.clear();
-					// Clearing camera's debug sprite
 					#if FLX_DEBUG
 					camera.debugLayer.graphics.clear();
 					#end
@@ -325,8 +322,6 @@ class CameraFrontEnd
 				}
 			}
 
-			// One reset per frame, after every camera, because a composite pass anywhere in this
-			// loop invalidates the stage renderer's cached GL state for all of them.
 			if (FlxCamera.layerBlendUsed)
 			{
 				FlxCamera.layerBlendUsed = false;

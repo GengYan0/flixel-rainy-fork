@@ -76,9 +76,6 @@ class FlxPointer
 		
 		if (camera == null)
 		{
-			// No camera at all - mouse updates still run on the transitional frames of an
-			// editor close or state switch. Fall back to raw screen coordinates instead of
-			// throwing; quitting the camera editor with ESC used to NPE here.
 			if (result == null)
 				return FlxPoint.get(_rawX, _rawY);
 			return result.set(_rawX, _rawY);
@@ -122,7 +119,6 @@ class FlxPointer
 		
 		if (camera == null)
 		{
-			// No camera (editor close / state switch transitional frame): fall back to game coordinates instead of throwing.
 			if (result == null)
 				return FlxPoint.get(gameX, gameY);
 			return result.set(gameX, gameY);
@@ -255,9 +251,6 @@ class FlxPointer
 		gameX = Std.int(_cachedPoint.x);
 		gameY = Std.int(_cachedPoint.y);
 		
-		// FlxG.camera may already be gone on the transitional frames of an editor close or
-		// state switch. Skip the view/world update and keep the last values, otherwise
-		// getWorldPosition -> viewToWorldX NPEs (quitting the camera editor with ESC).
 		if (FlxG.camera != null)
 		{
 			getViewPosition(FlxG.camera, _cachedPoint);

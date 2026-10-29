@@ -77,8 +77,6 @@ class FlxMouseEventManager extends FlxBasic
 	{
 		super.update(elapsed);
 
-		// Nothing registered: no callbacks can fire, so skip the whole scan instead of
-		// allocating a buffer and walking an empty list.
 		if (_list.length == 0)
 		{
 			_overList.resize(0);
@@ -100,8 +98,6 @@ class FlxMouseEventManager extends FlxBasic
 
 			if (checkOverlap(event))
 			{
-				// Stamp membership: `_wasOverPrev` answers "was this in last frame's over list",
-				// `_overEpoch` answers "is this in this frame's over list" — both O(1).
 				event._wasOverPrev = (event._overEpoch == _lastEpoch);
 				event._overEpoch = _epoch;
 				current.push(event);
@@ -139,9 +135,6 @@ class FlxMouseEventManager extends FlxBasic
 			}
 		}
 
-		// Commit the over set before any early return below. It used to be assigned at the very
-		// end, so returning on a disabled mouse left `_overList` frozen at an old frame and the
-		// next frame's over/out diff was computed against stale data.
 		_overList = current;
 		_overScratch = prev;
 		prev.resize(0);
@@ -220,8 +213,6 @@ class FlxMouseEventManager extends FlxBasic
 		{
 			mouseClickedTime = FlxG.game.ticks;
 
-			// Entries pushed on a previous release carry the old generation; starting a new one
-			// here replaces the old `previousClickedObjects` array without allocating.
 			final prevClickGen = _clickGen;
 			_clickList.resize(0);
 			_clickGen++;
@@ -324,8 +315,6 @@ class FlxMouseEventManager extends FlxBasic
 	 */
 	public function remove<T:FlxObject>(object:T):T
 	{
-		// Iterate backwards: removing while iterating forward shifts the array under the
-		// cursor and silently skips the next element.
 		var i = _list.length - 1;
 		while (i >= 0)
 		{

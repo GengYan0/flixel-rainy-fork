@@ -20,9 +20,6 @@ class FlxLayerBlendShader extends Shader
 	@:glFragmentSource('
 		varying vec2 openfl_TextureCoordv;
 
-		// Backdrop. Deliberately declared as the conventional sampler name: the quad path uses the
-		// bound bitmap size to turn rects into UVs, and drops a DRAW_QUADS command outright when
-		// no bitmap is bound, so the backdrop has to be reachable through that name.
 		uniform sampler2D bitmap;
 
 		uniform sampler2D uFront;

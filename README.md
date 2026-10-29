@@ -21,12 +21,6 @@ haxelib 名仍是 `flixel`，依赖它的库按原名解析。
 ## 安装
 
 ```bash
-haxelib dev flixel "D:/libs/rainy-flixel"
-```
-
-或者从仓库直接装：
-
-```bash
 haxelib git flixel https://github.com/GengYan0/flixel-rainy-fork
 ```
 
